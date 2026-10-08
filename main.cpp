@@ -22,7 +22,7 @@ void AnalisiSpettrale();
 
 int main() {
     // 1. INIZIALIZZAZIONE DELLO SPAZIO
-    // Creiamo 3 gusci: 0 = Atmosfera, 1 = 300-400, 2 = 400-500, 3 = 500-600.
+    // Creiamo 4 gusci: 0 = Atmosfera, 1 = 300-400, 2 = 400-500, 3 = 500-600.
     int numGusci = 4;
     KesslerSimulation sim(numGusci);
 
