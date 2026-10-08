@@ -14,23 +14,18 @@ struct SpaceObject {
     ObjectType type;
     
     // Parametri fisici
-    double crossSection;    // Area in m^2 (sigma: serve per calcolare la probabilità di urto)
-    double mass;            // Massa in kg (serve per calcolare il numero di frammenti post-urto)
+    double crossSection;    // Area in m^2 (sigma: per calcolare la probabilità di urto)
+    double mass;            // Massa in kg (per calcolare il numero di frammenti post-urto)
     
-    // Parametro topologico (fondamentale per estrarre la Matrice Empirica)
-    int initialShellIndex;  // Salva l'indice del guscio in cui l'oggetto si trovava
-                            // all'inizio dell'anno simulato.
-
-    // --- FUNZIONI LOGICHE (Helper) ---
+    int initialShellIndex;  // Salva l'indice del guscio in cui l'oggetto si trovava all'inizio dell'anno simulato.
     
-    // Verifica se l'oggetto può tentare una manovra di elusione (s_CAM)
     bool isManeuverable() const {
         return type == ObjectType::ACTIVE_PAYLOAD;
     }
 
     // Verifica se l'oggetto è abbastanza grande da essere tracciato dai radar a terra.
-    // Se non è tracciabile, un Active Payload non può schivarlo!
-    // (Soglia tipica: 10 cm di diametro, approssimabile a ~0.01 m^2 di sezione d'urto)
+    // Se non è tracciabile, un Active Payload non può schivarlo
+    // (Soglia: 10 cm di diametro, approssimabile a ~0.01 m^2 di sezione d'urto)
     bool isTrackable() const {
         return crossSection > 0.01; 
     }

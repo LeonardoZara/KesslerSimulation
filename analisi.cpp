@@ -72,7 +72,7 @@ void AnalisiSpettrale() {
         Eigen::MatrixXd matriceMedia = matriceSomma / numeroFileLetti;
         
         std::cout << "Letti con successo " << numeroFileLetti << " file." << '\n';
-        std::cout << "\n Matrice media (ergodica):" << '\n';
+        std::cout << "\n Matrice media: " << '\n';
         std::cout << matriceMedia << '\n';
         
         // (Opzionale) Puoi salvare questa matrice media in un file a parte
