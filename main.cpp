@@ -61,7 +61,7 @@ int main() {
         }
     }
 
-    std::cout << "\nSimulazione completata con successo!" << '\n';
+    std::cout << "\nSimulazione completata." << '\n';
     std::cout << "\nAvvio dell'analisi dati e calcolo degli autovalori." << '\n';
     AnalisiSpettrale(); 
 

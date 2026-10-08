@@ -15,12 +15,14 @@ private:
 
     // X_k: Il vettore di stato all'inizio del tick
     Eigen::VectorXd initialPop;
+
+    Eigen::VectorXd initialShellPop;
 public:
     //Matrici di transizione dei ogni guscio guscio
     std::vector<Eigen::Matrix4d> shellMatrixes;
-
+    int i=4;
     // Costruttore: inizializza le matrici a zero con la grandezza giusta
-    TransitionTracker(int shells) : numShells(shells), shellMatrixes(shells, Eigen::Matrix4d::Zero()) {
+    TransitionTracker(int shells) : numShells(shells), shellMatrixes(shells, Eigen::MatrixXd::Zero()) {
         flowMatrix = Eigen::MatrixXd::Zero(shells, shells);
         initialPop = Eigen::VectorXd::Zero(shells);
     }
@@ -35,6 +37,7 @@ public:
         for (int i = 0; i < numShells; ++i) {
             initialPop(i) = systemShells[i].getPopulationCount();
         }
+
     }
 
     // --- FASE 2 & 3: Registrazione Eventi ---
