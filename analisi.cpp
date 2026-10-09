@@ -3,125 +3,148 @@
 #include <sstream>
 #include <string>
 #include <vector>
-#include <filesystem>
+#include <cmath>
 #include <Eigen/Dense>
 #include <Eigen/Eigenvalues>
-
-namespace fs = std::filesystem;
-
-// Funzione helper per leggere un CSV e trasformarlo in MatrixXd
-Eigen::MatrixXd leggiMatriceCSV(const std::string& nomeFile, int numGusci) {
-    Eigen::MatrixXd matrice = Eigen::MatrixXd::Zero(numGusci, numGusci);
+ 
+// Funzione helper per leggere un CSV e trasformarlo in MatrixXd (dim x dim)
+Eigen::MatrixXd leggiMatriceCSV(const std::string& nomeFile, int dim) {
+    Eigen::MatrixXd matrice = Eigen::MatrixXd::Zero(dim, dim);
     std::ifstream file(nomeFile);
-    
+ 
     if (!file.is_open()) {
         std::cerr << "Errore nella lettura del file: " << nomeFile << '\n';
         return matrice;
     }
-
+ 
     std::string linea, cella;
     int riga = 0;
-    
+ 
     // Leggi il file riga per riga
-    while (std::getline(file, linea) && riga < numGusci) {
+    while (std::getline(file, linea) && riga < dim) {
         std::stringstream rigaStream(linea);
         int col = 0;
-        
+ 
         // Separa i valori usando la virgola
-        while (std::getline(rigaStream, cella, ',') && col < numGusci) {
+        while (std::getline(rigaStream, cella, ',') && col < dim) {
             matrice(riga, col) = std::stod(cella); // stod converte string in double
             col++;
         }
         riga++;
     }
-    
+ 
     file.close();
     return matrice;
 }
-
-void AnalisiSpettrale() {
-    int numGusci = 3; // Deve coincidere con i gusci della tua simulazione
+ 
+void AnalisiSpettrale(int anni) {
+    int numGusci = 4; // Deve coincidere con i gusci della tua simulazione
+    int numTipi = 4;  // P, N, U, F (ordine dell'enum ObjectType): matrici 4x4
     std::string cartellaOutput = "output/";
-
-    // 1. Prepariamo una matrice vuota per accumulare la somma
-    Eigen::MatrixXd matriceSomma = Eigen::MatrixXd::Zero(numGusci, numGusci);
-    int numeroFileLetti = 0;
-
-    std::cout << "Inizio lettura dei file CSV in " << cartellaOutput << "." << '\n';
-
-    // 2. Esploriamo la cartella!
-    for (const auto& entry : fs::directory_iterator(cartellaOutput)) {
-        
-        // Controlliamo che sia un file normale e che finisca per .csv
-        if (entry.is_regular_file() && entry.path().extension() == ".csv") {
-            
-            // Estraiamo il percorso completo (es. "output/matrice_empirica_anno_1.csv")
-            std::string percorsoFile = entry.path().string();
-            
-            // Leggiamo la matrice
-            Eigen::MatrixXd A = leggiMatriceCSV(percorsoFile, numGusci);
-            
-            // La sommiamo al totale
-            matriceSomma += A;
-            numeroFileLetti++;
+    std::string nomiGusci[4] = {"Atmosfera", "300-400 km", "400-500 km", "500-600 km"};
+ 
+    if (anni <= 0) {
+        std::cout << "Nessun anno da analizzare." << '\n';
+        return;
+    }
+ 
+    // 1. Tre matrici "somma" SEPARATE, una per guscio (niente matrice a blocchi).
+    // Per ogni colonna (tipo di oggetto) contiamo anche in quanti anni era definita,
+    // perche' la media va fatta solo sugli anni in cui quel tipo era presente.
+    std::vector<Eigen::MatrixXd> matriciSomma(numGusci, Eigen::MatrixXd::Zero(numTipi, numTipi));
+    std::vector<Eigen::VectorXd> anniValidi(numGusci, Eigen::VectorXd::Zero(numTipi));
+ 
+    std::cout << "Inizio lettura dei file CSV in " << cartellaOutput << "..." << '\n';
+ 
+    // 2. Per ogni guscio, leggiamo i CSV di tutti gli anni e li sommiamo
+    for (int s = 0; s < numGusci; ++s) {
+        for (int anno = 1; anno <= anni; ++anno) {
+            // es. "output/matrice_guscio_2_anno_17.csv"
+            std::string percorsoFile = cartellaOutput + "matrice_guscio_" + std::to_string(s)
+                                     + "_anno_" + std::to_string(anno) + ".csv";
+            Eigen::MatrixXd A = leggiMatriceCSV(percorsoFile, numTipi);
+ 
+            for (int j = 0; j < numTipi; ++j) {
+                if (std::isnan(A(0, j))) continue; // tipo assente a inizio anno: colonna non definita
+                matriciSomma[s].col(j) += A.col(j);
+                anniValidi[s](j) += 1.0;
+            }
         }
     }
-
-    // 3. Calcolo e Salvataggio della Media Finale
-    if (numeroFileLetti > 0) {
-        Eigen::MatrixXd matriceMedia = matriceSomma / numeroFileLetti;
-        
-        std::cout << "Letti con successo " << numeroFileLetti << " file." << '\n';
-        std::cout << "\n Matrice media: " << '\n';
+    std::cout << "Letti " << anni << " file per ciascuno dei " << numGusci << " gusci." << '\n';
+ 
+    // 3. Per ogni guscio: media temporale, autovalori, verdetto
+    std::vector<bool> kessler(numGusci, false);
+    std::vector<std::string> esito(numGusci, "non applicabile");
+ 
+    for (int s = 0; s < numGusci; ++s) {
+        // Media temporale colonna per colonna (un tipo mai presente resta a 0)
+        Eigen::MatrixXd matriceMedia = Eigen::MatrixXd::Zero(numTipi, numTipi);
+        for (int j = 0; j < numTipi; ++j) {
+            if (anniValidi[s](j) > 0.0) {
+                matriceMedia.col(j) = matriciSomma[s].col(j) / anniValidi[s](j);
+            }
+        }
+ 
+        std::cout << "\nGUSCIO " << s << " (" << nomiGusci[s] << ")" << '\n';
+        std::cout << "MATRICE MEDIA (righe/colonne = P, N, U, F)" << '\n';
         std::cout << matriceMedia << '\n';
-        
-        // (Opzionale) Puoi salvare questa matrice media in un file a parte
-        // salvaMatriceCSV("output/MATRICE_FINALE_MEDIA.csv", matriceMedia);
-
-        // 1. Inizializziamo il risolutore di Eigen per matrici generiche asimmetriche
+ 
+        // Il risolutore di Eigen per matrici generiche asimmetriche
         Eigen::EigenSolver<Eigen::MatrixXd> solver(matriceMedia);
-
-        // 2. Eigen restituisce un vettore di numeri complessi (std::complex<double>).
-        // Questo perché matematicamente gli autovalori possono avere parte immaginaria.
+ 
+        // Vettore di numeri complessi (std::complex<double>): gli autovalori
+        // possono avere parte immaginaria.
         Eigen::VectorXcd autovalori = solver.eigenvalues();
-
-        // 3. Troviamo l'autovalore con la parte reale più grande (il dominante)
+ 
+        // L'autovalore dominante e' quello con la parte reale piu' grande
         double lambda_max = -1000.0;
-            
-        std::cout << "Lista degli autovalori trovati:" << '\n';
+ 
+        std::cout << "\nAutovalori:" << '\n';
         for (int i = 0; i < autovalori.size(); i++) {
             double parteReale = autovalori(i).real();
             double parteImmaginaria = autovalori(i).imag();
-                
+ 
             std::cout << "  lambda_" << i << " = " << parteReale;
-            // Stampiamo la parte immaginaria solo se esiste (per eleganza)
             if (std::abs(parteImmaginaria) > 1e-9) {
-                std::cout << (parteImmaginaria > 0 ? " + " : " - ") 
-                            << std::abs(parteImmaginaria) << "i";
+                std::cout << (parteImmaginaria > 0 ? " + " : " - ")
+                          << std::abs(parteImmaginaria) << "i";
             }
             std::cout << '\n';
-
-            // Aggiorniamo il massimo
+ 
             if (parteReale > lambda_max) {
                 lambda_max = parteReale;
             }
         }
-
-        std::cout << "\nAutovalore dominante (lambda_max): " << lambda_max << '\n';
-
-        // 4. Il Verdetto Fisico
-        std::cout << "\nVerdetto della simulazione: ";
-        if (lambda_max > 1.0) {
-            std::cout << "sindrome di Kessler innescata!" << '\n';
-            std::cout << "La popolazione dei detriti crescera' in modo esponenziale." << '\n';
+        std::cout << "Autovalore dominante (lambda_max): " << lambda_max << '\n';
+ 
+        // 4. Il Verdetto Fisico, guscio per guscio
+        if (s == 0) {
+            // Il guscio 0 e' l'atmosfera: stato assorbente, non puo' innescare Kessler
+            std::cout << "Atmosfera (stato assorbente): verdetto non applicabile" << '\n';
+        } else if (lambda_max > 1.0) {
+            kessler[s] = true;
+            esito[s] = "KESSLER (instabile)";
+            std::cout << "Sindrome di Kessler innescata in questo guscio" << '\n';
         } else if (lambda_max < 1.0) {
-            std::cout << "ambiente spaziale stabile!" << '\n';
-            std::cout << "I detriti decadranno fisiologicamente nel tempo." << '\n';
+            esito[s] = "stabile";
+            std::cout << "Guscio stabile" << '\n';
         } else {
-            std::cout << "equilibrio critico." << '\n';
+            esito[s] = "equilibrio critico";
+            std::cout << "Equilibrio critico" << '\n';
         }
-
+    }
+ 
+    // 5. Riepilogo finale
+    std::cout << "\nVerdetto del modello:" << '\n';
+    bool almenoUno = false;
+    for (int s = 1; s < numGusci; ++s) {
+        std::cout << "Guscio " << s << " (" << nomiGusci[s] << "): " << esito[s] << '\n';
+        if (kessler[s]) almenoUno = true;
+    }
+    if (almenoUno) {
+        std::cout << "La popolazione di detriti cresce in modo esponenziale nei gusci instabili." << '\n';
     } else {
-        std::cout << "Nessun file CSV trovato nella cartella." << '\n';
+        std::cout << "Nessun guscio in regime di Kessler." << '\n';
     }
 }
