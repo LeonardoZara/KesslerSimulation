@@ -49,6 +49,7 @@ void KesslerSimulation::step(double dt) {
         }
     }
  
+    shells[0].clear();
     currentTime += dt;
 }
  
@@ -90,7 +91,7 @@ void KesslerSimulation::processDecay(double dt) {
  
 void KesslerSimulation::processCollisions(double dt) {
     std::uniform_real_distribution<double> uniform_dist(0.0, 1.0);
-    double v_rel = 10.0; // km/s (Come dimostrato nella tua tesi)
+    double v_rel = 10.0; // km/s (Come dimostrato nella tesina)
  
     for (int i = 1; i < numShells; ++i) { // Ignoriamo l'atmosfera (guscio 0)
         double N = shells[i].objects.size();
@@ -101,10 +102,12 @@ void KesslerSimulation::processCollisions(double dt) {
  
         // 1. Calcolo del Valore Atteso (Media teorica degli urti)
         // Sigma_media semplificata (in un modello reale faresti la media esatta)
-        double sigma_avg = 0.01; // km^2 (10 m^2)
+        double sigma_avg = 0.00001; // km^2 (10 m^2)
         
+        const double secondi_anno = 3.15576e7;
+
         // Formula della teoria cinetica dei gas per collisioni intra-guscio
-        double expected_collisions = 0.5 * (N * (N - 1) / V) * sigma_avg * v_rel * dt;
+        double expected_collisions = 0.5 * (N * (N - 1) / V) * sigma_avg * v_rel * dt * secondi_anno;
  
         // 2. Stocasticità: Estraiamo il numero VERO di urti da una Poissoniana
         std::poisson_distribution<int> poisson_dist(expected_collisions);
@@ -126,7 +129,7 @@ void KesslerSimulation::processCollisions(double dt) {
  
             // 3. Meccanica di Evitamento (s_CAM)
             bool collisionOccurs = true;
-            double s_CAM = 0.999; // Probabilità di schivata riuscita
+            double s_CAM = 0.99; // Probabilità di schivata riuscita
  
             if (obj1.isManeuverable() && obj2.isTrackable()) {
                 if (uniform_dist(rng) < s_CAM) collisionOccurs = false;

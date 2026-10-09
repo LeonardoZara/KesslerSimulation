@@ -29,10 +29,11 @@ public:
           rng(std::random_device{}()) // Inizializza il seed in modo puramente casuale dall'hardware
     {
         // Creiamo FISICAMENTE i gusci in memoria
-        for (int i = 0; i < numShells; ++i) {
+        shells.push_back(OrbitalShell(0, 0.0 , 300.0));
+        for (int i = 1; i < numShells; ++i) {
             // Valori di esempio: Indice, Quota Base (km), Spessore (km), Volume (km^3)
             // Per la tesi potrai tarare il volume esatto in base alla quota
-            shells.push_back(OrbitalShell(i, 400.0 + (i * 100.0), 100.0, 1.5e10));
+            shells.push_back(OrbitalShell(i, 300.0 + (i * 100.0), 100.0));
         }
     }
 

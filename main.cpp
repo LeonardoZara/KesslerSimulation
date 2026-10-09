@@ -30,16 +30,16 @@ int main() {
     //RICORDA DI METTERE UNA MATRICE PER GUSCIO
     sim.addObjectsToShell(1, 945, ObjectType::ACTIVE_PAYLOAD, 10.0, 500.0);
     sim.addObjectsToShell(1, 140, ObjectType::DEAD_PAYLOAD, 10.0, 500.0);
-    sim.addObjectsToShell(1, 3000, ObjectType::FRAGMENT, 10.0, 500.0);
+    sim.addObjectsToShell(1, 3000, ObjectType::FRAGMENT, 10.0, 1.0);
 
     sim.addObjectsToShell(2, 8520, ObjectType::ACTIVE_PAYLOAD, 15.0, 260.0);
     sim.addObjectsToShell(2, 1625, ObjectType::DEAD_PAYLOAD, 10.0, 500.0);
-    sim.addObjectsToShell(2, 12000, ObjectType::FRAGMENT, 10.0, 500.0);
+    sim.addObjectsToShell(2, 12000, ObjectType::FRAGMENT, 10.0, 1.0);
 
     sim.addObjectsToShell(3, 408, ObjectType::ACTIVE_PAYLOAD, 15.0, 260.0);
     sim.addObjectsToShell(3, 60, ObjectType::DEAD_PAYLOAD, 10.0, 500.0);
-    sim.addObjectsToShell(3, 85000, ObjectType::FRAGMENT, 10.0, 500.0);
-    
+    sim.addObjectsToShell(3, 85000, ObjectType::FRAGMENT, 10.0, 1.0);
+
     // 3. ESECUZIONE DELLA SIMULAZIONE
     int anniDaSimulare = 50;
     std::cout << "Avvio simulazione Kessler per " << anniDaSimulare << " anni..." << '\n';
