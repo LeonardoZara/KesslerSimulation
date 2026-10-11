@@ -1,7 +1,3 @@
-# KesslerSimulation
-Kessler sindrome stochastic model
-
-
 # Simulazione Stocastica della Sindrome di Kessler
 
 Questo repository contiene l'implementazione in **C++** di un modello stocastico per la simulazione della **Sindrome di Kessler**. Il progetto modella l'ambiente dell'Orbita Terrestre Bassa (LEO) utilizzando un approccio macroscopico basato sull'algebra delle catene di Markov e sulla teoria delle reti, al fine di prevedere matematicamente l'innesco dell'instabilità collisionale spaziale.
