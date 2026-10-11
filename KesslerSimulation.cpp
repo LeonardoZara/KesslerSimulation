@@ -101,7 +101,7 @@ void KesslerSimulation::processCollisions(double dt) {
         double density = N / V;
  
         // 1. Calcolo del Valore Atteso (Media teorica degli urti)
-        // Sigma_media semplificata (in un modello reale faresti la media esatta)
+        // Sigma_media semplificata (bisogna fare la media esatta)
         double sigma_avg = 0.00001; // km^2 (10 m^2)
         
         const double secondi_anno = 3.15576e7;
@@ -113,7 +113,7 @@ void KesslerSimulation::processCollisions(double dt) {
         std::poisson_distribution<int> poisson_dist(expected_collisions);
         int actual_collisions = poisson_dist(rng);
  
-        if (actual_collisions == 0) continue; // Che fortuna, nessun urto quest'anno!
+        if (actual_collisions == 0) continue;
  
         std::vector<int> to_destroy; // Indici degli oggetti distrutti
         std::uniform_int_distribution<int> object_picker(0, N - 1);
