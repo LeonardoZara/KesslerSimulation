@@ -9,6 +9,9 @@ enum class ObjectType {
     FRAGMENT=3        // Detriti da frammentazione (piccoli, passivi)
 };
 
+constexpr double fragmentSigma = 0.005; // m^2 (sotto 0.01: non tracciabile, non schivabile)
+constexpr double fragmentMass   = 1.0;   // kg
+
 // La struct base. Deve essere il più leggera possibile in memoria.
 struct SpaceObject {
     ObjectType type;
@@ -18,6 +21,8 @@ struct SpaceObject {
     double mass;            // Massa in kg (per calcolare il numero di frammenti post-urto)
     
     int initialShellIndex;  // Salva l'indice del guscio in cui l'oggetto si trovava all'inizio dell'anno simulato.
+    
+    ObjectType initialType;
     
     bool isManeuverable() const {
         return type == ObjectType::ACTIVE_PAYLOAD;

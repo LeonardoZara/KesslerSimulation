@@ -1,9 +1,60 @@
 #include <iostream>
 #include <cmath>
-
+#include <algorithm>
+#include <functional>
 #include "KesslerSimulation.hpp"
 
+
+// Indici dei tipi: 0 = P (attivo), 1 = N (morto), 2 = U (razzo), 3 = F (frammento)
+// Indici dei gusci: 0 = atmosfera, 1 = 300-400, 2 = 400-500, 3 = 500-600 km
+namespace {
+    const double secondsInYear = 3.15576e7;
+    const double v_rel = 10.0;    // km/s, velocita' relativa media in LEO
  
+    const double S_CAM = 0.999;
+
+    const double GAMMA = 0.01; // Guasti dei satelliti attivi: gamma = guasto a fine missione
+    const double KAPPA = 5.3; // kappa = perdita di manovrabilita' per piccoli urti con i frammenti.
+ 
+    const double SOGLIA_J_PER_G = 40.0; // Soglia di frammentazione catastrofica (PDF, dopo Eq. 5): 40 J per grammo di bersaglio.
+ 
+    const double C_FRAMMENTI[4] = {500.0, 500.0, 3000.0, 1.0}; // Frammenti generati dalla distruzione di un oggetto di ciascun tipo (PDF §5/§6.3):
+ 
+    // Tasso di decadimento verso il guscio sotto, epsilon[tipo][guscio], per anno.
+    //  - P: 0, i satelliti attivi mantengono la quota con i propulsori.
+    //  - F: PDF §6.3 (0.90 / 0.75 / 0.60).
+    //  - N e U: Eq. 28 con A/m = 0.075 e rho(h) = 3.7e-12 * exp(-(h-400)/60) (3.7e-12 e' la media dei due valori del PDF a 400 km; la scala di 60 km e' una mia stima).
+    //    Risultato 10.4 / 1.98 / 0.38; i primi due superano 1 (escono dal guscio in meno di un anno) e li limito a 1.
+    const double EPSILON[4][4] = {
+        {0.0, 0.0,  0.0,  0.0 },   // P
+        {0.0, 1.0,  1.0,  0.38},   // N
+        {0.0, 1.0,  1.0,  0.38},   // U
+        {0.0, 0.90, 0.75, 0.60}    // F
+    };
+ 
+    // Lanci di nuovi satelliti attivi per anno e per guscio (forzante esterna g_k del PDF).
+    // Ho scelto gamma * P0 (9, 85, 4): rimpiazzano i satelliti che si guastano, cosi' la
+    // flotta resta circa costante. Metti 0 per non lanciare nulla.
+    const double LANCI_P[4] = {0.0, 9.0, 85.0, 4.0};
+    const double payloadSigma = 130.0;  // m^2, come in main
+    const double payloadMass   = 800.0;  // kg,  come in main
+ 
+    // Tetto di sicurezza al numero di coppie candidate per guscio e per anno
+    // (poisson_distribution<int> va in overflow oltre ~2e9).
+    const double maxCandidates = 1.0e8;
+ 
+    // Sezione d'urto geometrica di una coppia: pi*(r1+r2)^2 con r = sqrt(A/pi)
+    // si semplifica in (sqrt(A1) + sqrt(A2))^2. Aree in m^2, risultato in m^2.
+    double sigmaCoppia(double areaA, double areaB) {
+        double somma = std::sqrt(areaA) + std::sqrt(areaB);
+        return somma * somma;
+    }
+}
+
+
+
+
+
 void KesslerSimulation::addObjectsToShell(int shellIndex, int count, ObjectType type, double crossSection, double mass) {
     if (shellIndex < 0 || shellIndex >= numShells) return;
     
@@ -13,7 +64,7 @@ void KesslerSimulation::addObjectsToShell(int shellIndex, int count, ObjectType 
         obj.crossSection = crossSection;
         obj.mass = mass;
         obj.initialShellIndex = shellIndex; // Verrà comunque sovrascritto dalla Fase 1
-        
+        obj.initialType = type;
         shells[shellIndex].objects.push_back(obj);
     }
 }
@@ -24,17 +75,17 @@ void KesslerSimulation::step(double dt) {
     for (int i = 0; i < numShells; ++i) {
         for (auto& obj : shells[i].objects) {
             obj.initialShellIndex = i;
+            obj.initialType = obj.type;
         }
     }
     tracker.reset(shells);
  
-    // FASE 2: Fisica del Decadimento
-    processDecay(dt);
- 
-    // FASE 3: Fisica delle Collisioni
     processCollisions(dt);
- 
-    // FASE 4: Costruzione delle Matrici dei Flussi (una per guscio)
+    processFailures(dt);
+    processDecay(dt);
+    processLaunches(dt);
+
+    // Costruzione delle Matrici dei Flussi (una per guscio)
     // Contiamo i SOPRAVVISSUTI di ogni guscio: gli oggetti che a inizio anno erano
     // in questo stesso guscio e ci sono ancora (diagonale della matrice: a_ii).
     // Restano fuori:
@@ -44,7 +95,7 @@ void KesslerSimulation::step(double dt) {
     for (int s = 0; s < numShells; ++s) {
         for (const auto& obj : shells[s].objects) {
             if (obj.initialShellIndex == s) {
-                tracker.recordFlow(s, obj.type, obj.type, 1.0);
+                tracker.recordFlow(s, obj.initialType, obj.type, 1.0);
             }
         }
     }
@@ -52,9 +103,7 @@ void KesslerSimulation::step(double dt) {
     shells[0].clear();
     currentTime += dt;
 }
- 
-// --- IMPLEMENTAZIONE DELLA FISICA PRIVATA ---
- 
+
 void KesslerSimulation::processDecay(double dt) {
     // Distribuzione uniforme per il lancio del dado [0.0, 1.0)
     std::uniform_real_distribution<double> dist(0.0, 1.0);
@@ -66,129 +115,182 @@ void KesslerSimulation::processDecay(double dt) {
         survivors.reserve(shells[i].objects.size());
  
         for (const auto& obj : shells[i].objects) {
-            // Calcolo Probabilità di decadimento (Semplificata per l'esempio)
-            // Nella tesi citi epsilon_F = 0.05. I satelliti attivi/morti decadono molto meno.
-            double p_decay = 0.0;
-            if (obj.type == ObjectType::FRAGMENT) {
-                p_decay = 0.05 * dt; 
-            } else {
-                p_decay = 0.001 * dt; // Satelliti grandi e pesanti risentono meno dell'attrito a quote alte
+
+            // Gli oggetti nati quest'anno (frammenti, lanci: initialShellIndex = -1)
+            // non decadono nell'anno di nascita: nel PDF a_41..a_44 contano i frammenti
+            // generati, senza sottrarre il loro decadimento, che avviene dall'anno dopo.
+            if (obj.initialShellIndex != i) {
+                survivors.push_back(obj);
+                continue;
             }
- 
-            // Lancio del dado!
+
+            // Probabilita' di decadimento dalla tabella EPSILON[tipo][guscio].
+            // COSA: prima 0.05 per i frammenti e 0.001 per tutto il resto, uguale in ogni guscio.
+            // PERCHE': il PDF usa un epsilon diverso per guscio e per tipo (a bassa quota
+            // l'attrito e' molto piu' forte); epsilon e' la frazione che scende ogni anno,
+            // come in a_ii = 1 - epsilon - ..., quindi p = epsilon*dt (al massimo 1).
+            // Si usa il tipo INIZIALE: un satellite che si guasta quest'anno decade come P
+            // (epsilon_P) e come N (epsilon_N) solo dall'anno dopo, come impone la matrice.
+            double p_decay = std::min(1.0, EPSILON[static_cast<int>(obj.initialType)][i] * dt);
+
             if (dist(rng) < p_decay) {
-                // Decade! Lo spingiamo nel guscio sottostante (i - 1)
+                // Decade! Va nel guscio sottostante (i - 1)
                 shells[i - 1].objects.push_back(obj);
             } else {
                 // Sopravvive! Resta nel guscio attuale
                 survivors.push_back(obj);
             }
         }
-        // Aggiorniamo il guscio solo con i sopravvissuti
+        // Aggiornamento del guscio con solo con i sopravvissuti
         shells[i].objects = std::move(survivors);
     }
 }
+
+
+void KesslerSimulation::processFailures(double dt) {
+    // Guasti dei satelliti attivi, termini gamma e kappa di a_11 e a_31.
+    // Ogni P diventa N (resta dov'è, cambia solo tipo) con probabilità p = gamma*dt + kappa * (urti attesi P-F per satellite).
+    // Gli urti attesi P-F per satellite sono (F/V)*sigma(P,F)*v*dt; kappa li moltiplica perche' i piccoli urti non distruttivi sono molti di piu' di quelli esplicitamente simulati.
+    std::uniform_real_distribution<double> dist(0.0, 1.0);
  
+    for (int i = 1; i < numShells; ++i) {
+        // Frammenti presenti a inizio anno (X_k): quelli nati negli urti di quest'anno hanno initialShellIndex = -1 e non contano.
+        double nF = 0.0;
+        for (const auto& obj : shells[i].objects) {
+            if (obj.type == ObjectType::FRAGMENT && obj.initialShellIndex == i) nF += 1.0;
+        }
+        double V = shells[i].volume;
+ 
+        for (auto& obj : shells[i].objects) {
+            if (obj.type != ObjectType::ACTIVE_PAYLOAD) continue;
+ 
+            double sigma_km2 = sigmaCoppia(obj.crossSection, fragmentSigma) * 1.0e-6;
+            double urti_PF = (nF / V) * sigma_km2 * v_rel * dt * secondsInYear;
+            double p_guasto = std::min(1.0, GAMMA * dt + KAPPA * urti_PF);
+ 
+            if (dist(rng) < p_guasto) {
+                obj.type = ObjectType::DEAD_PAYLOAD;
+            }
+        }
+    }
+}
+ 
+void KesslerSimulation::processLaunches(double dt) {
+    // Aggiungiamo LANCI_P[guscio]*dt satelliti con initialShellIndex = -1.
+    SpaceObject nuovo;
+    nuovo.type = ObjectType::ACTIVE_PAYLOAD;
+    nuovo.crossSection = payloadSigma;
+    nuovo.mass = payloadMass;
+    nuovo.initialShellIndex = -1;
+    nuovo.initialType = ObjectType::ACTIVE_PAYLOAD;
+ 
+    for (int i = 1; i < numShells; ++i) {
+        int quanti = static_cast<int>(std::lround(LANCI_P[i] * dt));
+        if (quanti > 0) {
+            shells[i].objects.insert(shells[i].objects.end(), quanti, nuovo);
+        }
+    }
+}
+
 void KesslerSimulation::processCollisions(double dt) {
     std::uniform_real_distribution<double> uniform_dist(0.0, 1.0);
-    double v_rel = 10.0; // km/s (Come dimostrato nella tesina)
  
     for (int i = 1; i < numShells; ++i) { // Ignoriamo l'atmosfera (guscio 0)
-        double N = shells[i].objects.size();
+        int N = static_cast<int>(shells[i].objects.size());
         if (N < 2) continue; // Servono almeno 2 oggetti per scontrarsi!
  
         double V = shells[i].volume;
-        double density = N / V;
  
-        // 1. Calcolo del Valore Atteso (Media teorica degli urti)
-        // Sigma_media semplificata (bisogna fare la media esatta)
-        double sigma_avg = 0.00001; // km^2 (10 m^2)
-        
-        const double secondi_anno = 3.15576e7;
-
+        // Calcolo del Valore Atteso (Media teorica degli urti)
+        // Vengono prese le coppie candidate con il sigma MASSIMO del guscio (due oggetti piu' grandi), poi ogni coppia viene accettata con probabilita'
+        // sigma_coppia/sigma_max. Il risultato e' esattamente un processo di Poisson con tasso proporzionale a sigma(i,j), senza dover sommare su tutte le coppie.
+        double A_max = 0.0;
+        for (const auto& obj : shells[i].objects) {
+            if (obj.crossSection > A_max) A_max = obj.crossSection;
+        }
+        double sigma_max_m2 = sigmaCoppia(A_max, A_max);
+        double sigma_max_km2 = sigma_max_m2 * 1.0e-6;   // m^2 -> km^2
+ 
         // Formula della teoria cinetica dei gas per collisioni intra-guscio
-        double expected_collisions = 0.5 * (N * (N - 1) / V) * sigma_avg * v_rel * dt * secondi_anno;
+        double candidati_attesi = 0.5 * (static_cast<double>(N) * (N - 1) / V) * sigma_max_km2 * v_rel * dt * secondsInYear;
  
-        // 2. Stocasticità: Estraiamo il numero VERO di urti da una Poissoniana
-        std::poisson_distribution<int> poisson_dist(expected_collisions);
-        int actual_collisions = poisson_dist(rng);
+        // Tetto di sicurezza: poisson_distribution<int> va in overflow oltre ~2e9.
+        candidati_attesi = std::min(candidati_attesi, maxCandidates);
+        if (candidati_attesi <= 0.0) continue;
  
-        if (actual_collisions == 0) continue;
+        // Estrazione del numero vero di coppie candidate da una Poissoniana
+        std::poisson_distribution<int> poisson_dist(candidati_attesi);
+        int candidati = poisson_dist(rng);
  
-        std::vector<int> to_destroy; // Indici degli oggetti distrutti
+        if (candidati == 0) continue;
+ 
+        std::vector<char> distrutto(N, 0);
         std::uniform_int_distribution<int> object_picker(0, N - 1);
  
-        for (int c = 0; c < actual_collisions; ++c) {
-            // Peschiamo 2 oggetti a caso
+        for (int c = 0; c < candidati; ++c) {
+            // 2 oggetti a caso (solo tra i N presenti a inizio anno: i frammenti appena nati sono in coda e non vengono mai pescati)
             int idx1 = object_picker(rng);
             int idx2 = object_picker(rng);
             while (idx1 == idx2) idx2 = object_picker(rng); // Assicurati che siano diversi
  
+            if (distrutto[idx1] || distrutto[idx2]) continue;
+ 
             const SpaceObject obj1 = shells[i].objects[idx1];
             const SpaceObject obj2 = shells[i].objects[idx2];
  
-            // 3. Meccanica di Evitamento (s_CAM)
+            // Viene accettata la coppia con probabilita' sigma_coppia / sigma_max
+            double sigma_coppia_m2 = sigmaCoppia(obj1.crossSection, obj2.crossSection);
+            if (uniform_dist(rng) * sigma_max_m2 >= sigma_coppia_m2) continue;
+ 
             bool collisionOccurs = true;
-            double s_CAM = 0.99; // Probabilità di schivata riuscita
  
             if (obj1.isManeuverable() && obj2.isTrackable()) {
-                if (uniform_dist(rng) < s_CAM) collisionOccurs = false;
+                if (uniform_dist(rng) < S_CAM) collisionOccurs = false;
             } else if (obj2.isManeuverable() && obj1.isTrackable()) {
-                if (uniform_dist(rng) < s_CAM) collisionOccurs = false;
+                if (uniform_dist(rng) < S_CAM) collisionOccurs = false;
             }
- 
-            if (collisionOccurs) {
-                // Li segniamo per la distruzione
-                to_destroy.push_back(idx1);
-                to_destroy.push_back(idx2);
-                
-                // 4. Generazione dei frammenti (Cascata di Kessler)
-                generateFragments(i, obj1, obj2);
-            }
+            if (!collisionOccurs) continue;
+
+            // L'urto e' catastrofico solo se l'energia del proiettile (il piu' leggero) per grammo di bersaglio (il piu' pesante) supera 40 J/g.
+            // E/m_bersaglio = 0.5 * (m_leggero/m_pesante) * v^2, con v in m/s; dividendo per 1000 si passa da J/kg a J/g.
+            double m_leggero = std::min(obj1.mass, obj2.mass);
+            double m_pesante = std::max(obj1.mass, obj2.mass);
+            double v_m_s = v_rel * 1000.0;
+            double energia_J_per_g = 0.5 * (m_leggero / m_pesante) * v_m_s * v_m_s / 1000.0;
+            if (energia_J_per_g < SOGLIA_J_PER_G) continue;
+            distrutto[idx1] = 1;
+            distrutto[idx2] = 1;
+            generateFragments(i, obj1, obj2);
         }
  
-        // 5. Pulizia: Rimuoviamo gli oggetti distrutti dal guscio
-        // (Usiamo un trucco per non sballare gli indici mentre eliminiamo)
-        if (!to_destroy.empty()) {
-            std::sort(to_destroy.begin(), to_destroy.end(), std::greater<int>());
-            to_destroy.erase(std::unique(to_destroy.begin(), to_destroy.end()), to_destroy.end());
-            
-            for (int idx : to_destroy) {
-                shells[i].objects.erase(shells[i].objects.begin() + idx);
-            }
+        // Rimozione oggetti distrutti dal guscio
+        std::vector<SpaceObject> rimasti;
+        rimasti.reserve(shells[i].objects.size());
+        for (int k = 0; k < static_cast<int>(shells[i].objects.size()); ++k) {
+            if (k >= N || !distrutto[k]) rimasti.push_back(shells[i].objects[k]);
         }
+        shells[i].objects = std::move(rimasti);
     }
 }
  
 void KesslerSimulation::generateFragments(int shellIndex, const SpaceObject& obj1, const SpaceObject& obj2) {
-    // Formula base empirica: Num frammenti proporzionale alla massa totale
-    // C_p e C_u citati nella tua tesi (500 per satelliti, 3000 per upper stages)
-    double totalMass = obj1.mass + obj2.mass;
-    int numNewFragments = static_cast<int>(totalMass * 0.5); // Es. 1 kg = 0.5 frammenti macroscopici
+    // Numero di frammenti = c_tipo1 + c_tipo2
+    int numNewFragments = static_cast<int>(C_FRAMMENTI[static_cast<int>(obj1.type)] + C_FRAMMENTI[static_cast<int>(obj2.type)]);
  
-    for (int i = 0; i < numNewFragments; ++i) {
-        SpaceObject frag;
-        frag.type = ObjectType::FRAGMENT;
-        frag.crossSection = 0.005; // 50 cm^2
-        frag.mass = 1.0;           // 1 kg
-        
-        // FONDAMENTALE PER LA MATRICE: I frammenti "ereditano" il TIPO dai genitori.
-        // Scegliamo a caso di chi è "figlio" questo frammento: la sua colonna (origine)
-        // nella matrice del guscio sara' il tipo di quel genitore (a_41, a_42, a_43, a_44).
-        std::uniform_real_distribution<double> dist(0.0, 1.0);
-        const SpaceObject& genitore = (dist(rng) < 0.5) ? obj1 : obj2;
+    SpaceObject frag;
+    frag.type = ObjectType::FRAGMENT;
+    frag.crossSection = fragmentSigma;
+    frag.mass = fragmentMass;
+    // -1 = "nato quest'anno": step() non lo contera' tra i sopravvissuti
+    frag.initialShellIndex = -1;
+    frag.initialType = ObjectType::FRAGMENT;
  
-        // -1 = "nato quest'anno": la FASE 4 di step() non lo contera' tra i sopravvissuti
-        frag.initialShellIndex = -1;
+    // I frammenti nascono subito in coda al guscio (non vengono pescati in questo anno, vedi object_picker); inseriti tutti insieme con una sola chiamata.
+    shells[shellIndex].objects.insert(shells[shellIndex].objects.end(), numNewFragments, frag);
  
-        // Nota: non li aggiungiamo subito a 'shells[shellIndex].objects' per non farli 
-        // scontrare nel turno in cui sono appena nati (e non invalidare l'iteratore).
-        // Nel codice di produzione reale li aggiungeresti a un vettore temporaneo 
-        // e li uniresti alla fine di processCollisions. Per semplicità qui li mettiamo subito in coda.
-        shells[shellIndex].objects.push_back(frag);
-        
-        // E lo registriamo nel tracker, nella matrice del guscio dove e' avvenuto l'urto:
-        // riga = FRAGMENT (destinazione), colonna = tipo del genitore (origine)
-        tracker.recordFlow(shellIndex, genitore.type, ObjectType::FRAGMENT, 1.0);
-    }
+    // Registrazione nel tracker: meta' dei frammenti a ciascun genitore.
+    // il termine collisionale e' bilineare e va diviso tra le due colonne.
+    // Riga = FRAGMENT (destinazione), colonna = tipo del genitore (origine).
+    tracker.recordFlow(shellIndex, obj1.type, ObjectType::FRAGMENT, 0.5 * numNewFragments);
+    tracker.recordFlow(shellIndex, obj2.type, ObjectType::FRAGMENT, 0.5 * numNewFragments);
 }
