@@ -23,7 +23,7 @@ namespace {
     // Tasso di decadimento verso il guscio sotto, epsilon[tipo][guscio], per anno.
     //  - P: 0, i satelliti attivi mantengono la quota con i propulsori.
     //  - F: PDF §6.3 (0.90 / 0.75 / 0.60).
-    //  - N e U: Eq. 28 con A/m = 0.075 e rho(h) = 3.7e-12 * exp(-(h-400)/60) (3.7e-12 e' la media dei due valori del PDF a 400 km; la scala di 60 km e' una mia stima).
+    //  - N e U: Eq. 28 con A/m = 0.075 e rho(h) = 3.7e-12 * exp(-(h-400)/60) (3.7e-12 é la media dei due valori del PDF a 400 km; la scala di 60 km é una mia stima).
     //    Risultato 10.4 / 1.98 / 0.38; i primi due superano 1 (escono dal guscio in meno di un anno) e li limito a 1.
     const double EPSILON[4][4] = {
         {0.0, 0.0,  0.0,  0.0 },   // P
@@ -126,8 +126,8 @@ void KesslerSimulation::processDecay(double dt) {
 
             // Probabilita' di decadimento dalla tabella EPSILON[tipo][guscio].
             // COSA: prima 0.05 per i frammenti e 0.001 per tutto il resto, uguale in ogni guscio.
-            // PERCHE': il PDF usa un epsilon diverso per guscio e per tipo (a bassa quota
-            // l'attrito e' molto piu' forte); epsilon e' la frazione che scende ogni anno,
+            // PERCHé: il PDF usa un epsilon diverso per guscio e per tipo (a bassa quota
+            // l'attrito é molto piu' forte); epsilon é la frazione che scende ogni anno,
             // come in a_ii = 1 - epsilon - ..., quindi p = epsilon*dt (al massimo 1).
             // Si usa il tipo INIZIALE: un satellite che si guasta quest'anno decade come P
             // (epsilon_P) e come N (epsilon_N) solo dall'anno dopo, come impone la matrice.
@@ -150,7 +150,7 @@ void KesslerSimulation::processDecay(double dt) {
 void KesslerSimulation::processFailures(double dt) {
     // Guasti dei satelliti attivi, termini gamma e kappa di a_11 e a_31.
     // Ogni P diventa N (resta dov'è, cambia solo tipo) con probabilità p = gamma*dt + kappa * (urti attesi P-F per satellite).
-    // Gli urti attesi P-F per satellite sono (F/V)*sigma(P,F)*v*dt; kappa li moltiplica perche' i piccoli urti non distruttivi sono molti di piu' di quelli esplicitamente simulati.
+    // Gli urti attesi P-F per satellite sono (F/V)*sigma(P,F)*v*dt; kappa li moltiplica perché i piccoli urti non distruttivi sono molti di piu' di quelli esplicitamente simulati.
     std::uniform_real_distribution<double> dist(0.0, 1.0);
  
     for (int i = 1; i < numShells; ++i) {
@@ -203,7 +203,7 @@ void KesslerSimulation::processCollisions(double dt) {
  
         // Calcolo del Valore Atteso (Media teorica degli urti)
         // Vengono prese le coppie candidate con il sigma MASSIMO del guscio (due oggetti piu' grandi), poi ogni coppia viene accettata con probabilita'
-        // sigma_coppia/sigma_max. Il risultato e' esattamente un processo di Poisson con tasso proporzionale a sigma(i,j), senza dover sommare su tutte le coppie.
+        // sigma_coppia/sigma_max. Il risultato é esattamente un processo di Poisson con tasso proporzionale a sigma(i,j), senza dover sommare su tutte le coppie.
         double A_max = 0.0;
         for (const auto& obj : shells[i].objects) {
             if (obj.crossSection > A_max) A_max = obj.crossSection;
@@ -251,7 +251,7 @@ void KesslerSimulation::processCollisions(double dt) {
             }
             if (!collisionOccurs) continue;
 
-            // L'urto e' catastrofico solo se l'energia del proiettile (il piu' leggero) per grammo di bersaglio (il piu' pesante) supera 40 J/g.
+            // L'urto è catastrofico solo se l'energia del proiettile (il piu' leggero) per grammo di bersaglio (il piu' pesante) supera 40 J/g.
             // E/m_bersaglio = 0.5 * (m_leggero/m_pesante) * v^2, con v in m/s; dividendo per 1000 si passa da J/kg a J/g.
             double m_leggero = std::min(obj1.mass, obj2.mass);
             double m_pesante = std::max(obj1.mass, obj2.mass);
@@ -289,7 +289,7 @@ void KesslerSimulation::generateFragments(int shellIndex, const SpaceObject& obj
     shells[shellIndex].objects.insert(shells[shellIndex].objects.end(), numNewFragments, frag);
  
     // Registrazione nel tracker: meta' dei frammenti a ciascun genitore.
-    // il termine collisionale e' bilineare e va diviso tra le due colonne.
+    // il termine collisionale é bilineare e va diviso tra le due colonne.
     // Riga = FRAGMENT (destinazione), colonna = tipo del genitore (origine).
     tracker.recordFlow(shellIndex, obj1.type, ObjectType::FRAGMENT, 0.5 * numNewFragments);
     tracker.recordFlow(shellIndex, obj2.type, ObjectType::FRAGMENT, 0.5 * numNewFragments);

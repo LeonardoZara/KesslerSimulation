@@ -67,18 +67,18 @@ void AnalisiSpettrale(int anni) {
  
     // 1. Tre matrici "somma" SEPARATE, una per guscio (niente matrice a blocchi).
     // Media pesata con la popolazione iniziale invece della media semplice.
-    // Ogni colonna j di ogni anno entra con peso X_k(j), cioe' il numero di oggetti di quel tipo a inizio anno. Equivale a (somma dei flussi) / (somma delle popolazioni).
+    // Ogni colonna j di ogni anno entra con peso X_k(j), cioé il numero di oggetti di quel tipo a inizio anno. Equivale a (somma dei flussi) / (somma delle popolazioni).
     // a_ij = flusso / X_j; se X_j è piccolo il rapporto è enorme e casuale (10 frammenti e un urto: a_44 = 28).
     // Un tipo assente (X_j = 0) ha peso 0, quindi sparisce da solo.
     std::vector<Eigen::MatrixXd> matriciSomma(numGusci, Eigen::MatrixXd::Zero(numTipi, numTipi));
     std::vector<Eigen::VectorXd> anniValidi(numGusci, Eigen::VectorXd::Zero(numTipi)); // somma dei pesi X_k(j)
  
-    // Sotto questa popolazione una colonna e' troppo rumorosa per dire se l'anno e' instabile (usata solo per il conteggio degli anni con lambda_max > 1). 
+    // Sotto questa popolazione una colonna é troppo rumorosa per dire se l'anno é instabile (usata solo per il conteggio degli anni con lambda_max > 1). 
     // Un singolo urto catastrofico genera ~250 frammenti per genitore, quindi con X oggetti sposta a_44 di 250/X: con 1000 oggetti al massimo di 0.25, con 100 di 2.5 (basta un urto per superare 1).
     const double POPOLAZIONE_MINIMA = 1000.0;
  
     // lambda_max di ogni singolo anno, per ogni guscio.
-    // Dopo una cascata i bersagli sono finiti, le matrici degli ultimi anni tornano stabili e la media su 50 anni puo' scendere sotto 1 anche se la sindrome e' scoppiata nei primi anni.
+    // Dopo una cascata i bersagli sono finiti, le matrici degli ultimi anni tornano stabili e la media su 50 anni puo' scendere sotto 1 anche se la sindrome é scoppiata nei primi anni.
     std::vector<int> anniInstabili(numGusci, 0);   // anni con lambda_max > 1
     std::vector<int> primoAnnoInstabile(numGusci, 0);
     std::vector<double> lambdaPicco(numGusci, 0.0);
@@ -141,7 +141,7 @@ void AnalisiSpettrale(int anni) {
         // Vettore di numeri complessi (std::complex<double>): gli autovalori possono avere parte immaginaria.
         Eigen::VectorXcd autovalori = solver.eigenvalues();
  
-        // L'autovalore dominante e' quello con la parte reale piu' grande
+        // L'autovalore dominante é quello con la parte reale piu' grande
         double lambda_max = -1000.0;
  
         std::cout << "\nAutovalori:" << '\n';
@@ -177,7 +177,7 @@ void AnalisiSpettrale(int anni) {
             esito[s] = "KESSLER (instabile)";
             std::cout << "Sindrome di Kessler innescata in questo guscio" << '\n';
         } else if (anniInstabili[s] > 0) {
-            // La media e' < 1 ma in alcuni anni lambda_max era > 1: la cascata e' partita e poi si e' fermata (bersagli esauriti o frammenti decaduti).
+            // La media é < 1 ma in alcuni anni lambda_max era > 1: la cascata é partita e poi si é fermata (bersagli esauriti o frammenti decaduti).
             kessler[s] = true;
             esito[s] = "KESSLER TRANSITORIA (instabile nei primi anni, poi esaurita)";
             std::cout << "Media stabile, ma cascata innescata in " << anniInstabili[s] << " anni" << '\n';
