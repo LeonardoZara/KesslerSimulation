@@ -51,8 +51,6 @@ Eseguendo la simulazione con i parametri di default (scenario sub-critico e supe
 * Gli autovalori calcolati per ogni step della simulazione.
 * Il tracciamento del superamento della soglia $\lambda_{max} = 1$.
 
-*[DA COMPILARE: Se il tuo programma genera file .csv, grafici o log particolari, specificalo qui. Ad esempio: "Il programma genera un file `results.csv` contenente l'andamento di lambda rispetto all'aumento dei frammenti F, utile per generare plot."]*
-
 ##  Limitazioni del Modello
 La simulazione attuale presenta alcune limitazioni di cui tenere conto:
 * Assenza di un database esatto per i frammenti $F$ di piccole dimensioni (trattati in modo parametrico).
