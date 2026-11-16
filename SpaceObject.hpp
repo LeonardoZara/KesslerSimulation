@@ -9,8 +9,8 @@ enum class ObjectType {
     FRAGMENT=3        // Detriti da frammentazione (piccoli, passivi)
 };
 
-constexpr double fragmentSigma = 0.005; // m^2 (sotto 0.01: non tracciabile, non schivabile)
-constexpr double fragmentMass   = 1.0;   // kg
+constexpr double fragmentSigma = 0.00785; // m^2 (sotto 0.01: non tracciabile, non schivabile)
+constexpr double fragmentMass  = 1.0;   // kg
 
 // La struct base. Deve essere il più leggera possibile in memoria.
 struct SpaceObject {

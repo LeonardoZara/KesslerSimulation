@@ -6,7 +6,7 @@
 #include <cmath>
 #include <Eigen/Dense>
 #include <Eigen/Eigenvalues>
- 
+
 // Funzione helper per leggere un CSV e trasformarlo in MatrixXd (dim x dim)
 bool leggiMatriceCSV(const std::string& nomeFile, int righe, int colonne, Eigen::MatrixXd& matrice) {
     matrice = Eigen::MatrixXd::Zero(righe, colonne);

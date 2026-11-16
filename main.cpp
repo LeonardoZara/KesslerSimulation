@@ -34,22 +34,22 @@ int main() {
     auto n = [scala](int quantità){ return static_cast<int>(quantità * scala);};
  
     // Parametri: Guscio, Quantità, Tipo, Sezione d'Urto (m^2), Massa (kg)
-    // Satelliti: 130 m^2 e 800 kg. Frammenti: i valori comuni definiti in SpaceObject.hpp
+    // Satelliti: 37.5 m^2 e 500 kg. Frammenti: i valori comuni definiti in SpaceObject.hpp
 
     // 300-400 km
-    sim.addObjectsToShell(1, n(945),   ObjectType::ACTIVE_PAYLOAD, 130.0, 800.0);
-    sim.addObjectsToShell(1, n(140),   ObjectType::DEAD_PAYLOAD,   130.0, 800.0);
+    sim.addObjectsToShell(1, n(945),   ObjectType::ACTIVE_PAYLOAD, 37.5, 500.0);
+    sim.addObjectsToShell(1, n(140),   ObjectType::DEAD_PAYLOAD,   37.5, 500.0);
     sim.addObjectsToShell(1, n(3000),  ObjectType::FRAGMENT, fragmentSigma, fragmentMass);
  
     // 400-500 km
     // [MODIFICA] N0 = 1265 come nel PDF (nel tuo file c'era 1625, cifre scambiate).
-    sim.addObjectsToShell(2, n(8520),  ObjectType::ACTIVE_PAYLOAD, 130.0, 800.0);
-    sim.addObjectsToShell(2, n(1265),  ObjectType::DEAD_PAYLOAD,   130.0, 800.0);
+    sim.addObjectsToShell(2, n(8520),  ObjectType::ACTIVE_PAYLOAD, 37.5, 500.0);
+    sim.addObjectsToShell(2, n(1265),  ObjectType::DEAD_PAYLOAD,   37.5, 500.0);
     sim.addObjectsToShell(2, n(12000), ObjectType::FRAGMENT, fragmentSigma, fragmentMass);
  
     // 500-600 km
-    sim.addObjectsToShell(3, n(408),   ObjectType::ACTIVE_PAYLOAD, 130.0, 800.0);
-    sim.addObjectsToShell(3, n(60),    ObjectType::DEAD_PAYLOAD,   130.0, 800.0);
+    sim.addObjectsToShell(3, n(408),   ObjectType::ACTIVE_PAYLOAD, 37.5, 500.0);
+    sim.addObjectsToShell(3, n(60),    ObjectType::DEAD_PAYLOAD,   37.5, 500.0);
     sim.addObjectsToShell(3, n(85000), ObjectType::FRAGMENT, fragmentSigma, fragmentMass);
  
     int anniDaSimulare = 50;

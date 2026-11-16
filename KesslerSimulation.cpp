@@ -4,7 +4,6 @@
 #include <functional>
 #include "KesslerSimulation.hpp"
 
-
 // Indici dei tipi: 0 = P (attivo), 1 = N (morto), 2 = U (razzo), 3 = F (frammento)
 // Indici dei gusci: 0 = atmosfera, 1 = 300-400, 2 = 400-500, 3 = 500-600 km
 namespace {

@@ -2,7 +2,6 @@
 
 #include <vector>
 #include <random>
-#include <string>
 #include "OrbitalShell.hpp"
 #include "TransitionTracker.hpp"
 
