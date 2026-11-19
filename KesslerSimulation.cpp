@@ -31,6 +31,7 @@ namespace {
         {0.0, 0.90, 0.75, 0.60}    // F
     };
  
+
     // Lanci di nuovi satelliti attivi per anno e per guscio (forzante esterna g_k del PDF).
     // Ho scelto gamma * P0 (9, 85, 4): rimpiazzano i satelliti che si guastano, cosi' la
     // flotta resta circa costante. Metti 0 per non lanciare nulla.
