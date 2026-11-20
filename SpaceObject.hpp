@@ -1,25 +1,19 @@
 #pragma once
 
-// Definiamo i tipi di oggetti spaziali. Usare 'enum class' è molto più sicuro
-// in C++ moderno rispetto ai vecchi enum, perché impedisce conversioni accidentali in numeri.
 enum class ObjectType {
-    ACTIVE_PAYLOAD=0, // Satelliti operativi con propulsione (s_CAM)
-    DEAD_PAYLOAD=1,   // Satelliti guasti o a fine vita (passivi)
-    ROCKET_BODY=2,    // Secondi stadi dei razzi (massicci, passivi)
-    FRAGMENT=3        // Detriti da frammentazione (piccoli, passivi)
+    ACTIVE_PAYLOAD=0, 
+    DEAD_PAYLOAD=1,   
+    ROCKET_BODY=2,    
+    FRAGMENT=3
 };
 
 constexpr double fragmentSigma = 0.00785; // m^2 (sotto 0.01: non tracciabile, non schivabile)
 constexpr double fragmentMass  = 1.0;   // kg
 
-// La struct base. Deve essere il più leggera possibile in memoria.
 struct SpaceObject {
     ObjectType type;
-    
-    // Parametri fisici
     double crossSection;    // Area in m^2 (sigma: per calcolare la probabilità di urto)
     double mass;            // Massa in kg (per calcolare il numero di frammenti post-urto)
-    
     int initialShellIndex;  // Salva l'indice del guscio in cui l'oggetto si trovava all'inizio dell'anno simulato.
     
     ObjectType initialType;
@@ -28,9 +22,6 @@ struct SpaceObject {
         return type == ObjectType::ACTIVE_PAYLOAD;
     }
 
-    // Verifica se l'oggetto è abbastanza grande da essere tracciato dai radar a terra.
-    // Se non è tracciabile, un Active Payload non può schivarlo
-    // (Soglia: 10 cm di diametro, approssimabile a ~0.01 m^2 di sezione d'urto)
     bool isTrackable() const {
         return crossSection > 0.01; 
     }

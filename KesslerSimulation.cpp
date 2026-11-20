@@ -2,6 +2,7 @@
 #include <cmath>
 #include <algorithm>
 #include <functional>
+#include <stdexcept>
 #include "KesslerSimulation.hpp"
 
 // Indici dei tipi: 0 = P (attivo), 1 = N (morto), 2 = U (razzo), 3 = F (frammento)
@@ -26,19 +27,11 @@ namespace {
     //    Risultato 10.4 / 1.98 / 0.38; i primi due superano 1 (escono dal guscio in meno di un anno) e li limito a 1.
     const double EPSILON[4][4] = {
         {0.0, 0.0,  0.0,  0.0 },   // P
-        {0.0, 1.0,  1.0,  0.38},   // N
+        {0.0, 1.0,  1.0,  0.27},   // N
         {0.0, 1.0,  1.0,  0.38},   // U
         {0.0, 0.90, 0.75, 0.60}    // F
     };
- 
 
-    // Lanci di nuovi satelliti attivi per anno e per guscio (forzante esterna g_k del PDF).
-    // Ho scelto gamma * P0 (9, 85, 4): rimpiazzano i satelliti che si guastano, cosi' la
-    // flotta resta circa costante. Metti 0 per non lanciare nulla.
-    const double LANCI_P[4] = {0.0, 9.0, 85.0, 4.0};
-    const double payloadSigma = 130.0;  // m^2, come in main
-    const double payloadMass   = 800.0;  // kg,  come in main
- 
     // Tetto di sicurezza al numero di coppie candidate per guscio e per anno
     // (poisson_distribution<int> va in overflow oltre ~2e9).
     const double maxCandidates = 1.0e8;
@@ -50,10 +43,6 @@ namespace {
         return somma * somma;
     }
 }
-
-
-
-
 
 void KesslerSimulation::addObjectsToShell(int shellIndex, int count, ObjectType type, double crossSection, double mass) {
     if (shellIndex < 0 || shellIndex >= numShells) return;
@@ -69,6 +58,39 @@ void KesslerSimulation::addObjectsToShell(int shellIndex, int count, ObjectType 
     }
 }
  
+void KesslerSimulation::setLaunches(const std::vector<double>& ratesPerYear, double crossSection, double mass) {
+    if (static_cast<int>(ratesPerYear.size()) != numShells) {
+        throw std::invalid_argument("setLaunches: servono esattamente numShells valori (uno per guscio, atmosfera inclusa)");
+    }
+    launchRates = ratesPerYear;
+    launchRates[0] = 0.0; // nessun lancio "nell'atmosfera"
+    launchCrossSection = crossSection;
+    launchMass = mass;
+}
+
+void KesslerSimulation::saveInitialState() {
+    initialShells = shells;
+}
+
+void KesslerSimulation::restoreInitialState(std::uint64_t baseSeed, std::uint64_t runIndex) {
+    if (initialShells.size() != shells.size()) {
+        throw std::logic_error("restoreInitialState: chiamare prima saveInitialState()");
+    }
+    // 1. Popolazioni: tutti i gusci tornano identici alla copia salvata (oggetti, tipi, sezioni, masse)
+    shells = initialShells;
+    // 2. Tracker: flussi e popolazioni iniziali azzerati (comunque riscritti da tracker.reset() a ogni step)
+    tracker = TransitionTracker(numShells);
+    // 3. Tempo
+    currentTime = 0.0;
+    // 4. RNG: seed deterministico (baseSeed, runIndex) espanso da seed_seq su tutto lo stato di mt19937.
+    //    Run diverse -> flussi casuali diversi; stesse (baseSeed, runIndex) -> stessa traiettoria.
+    std::seed_seq seq{ static_cast<std::uint32_t>(baseSeed & 0xFFFFFFFFu),
+                       static_cast<std::uint32_t>(baseSeed >> 32),
+                       static_cast<std::uint32_t>(runIndex & 0xFFFFFFFFu),
+                       static_cast<std::uint32_t>(runIndex >> 32) };
+    rng.seed(seq);
+}
+
 void KesslerSimulation::step(double dt) {
     // FASE 1: Snapshot Iniziale
     // Aggiorniamo l'indice iniziale di tutti gli oggetti e diciamo al tracker di prepararsi
@@ -176,16 +198,16 @@ void KesslerSimulation::processFailures(double dt) {
 }
  
 void KesslerSimulation::processLaunches(double dt) {
-    // Aggiungiamo LANCI_P[guscio]*dt satelliti con initialShellIndex = -1.
+    // Aggiungiamo launchRates[guscio]*dt satelliti con initialShellIndex = -1.
     SpaceObject nuovo;
     nuovo.type = ObjectType::ACTIVE_PAYLOAD;
-    nuovo.crossSection = payloadSigma;
-    nuovo.mass = payloadMass;
+    nuovo.crossSection = launchCrossSection;
+    nuovo.mass = launchMass;
     nuovo.initialShellIndex = -1;
     nuovo.initialType = ObjectType::ACTIVE_PAYLOAD;
- 
+
     for (int i = 1; i < numShells; ++i) {
-        int quanti = static_cast<int>(std::lround(LANCI_P[i] * dt));
+        int quanti = static_cast<int>(std::lround(launchRates[i] * dt));
         if (quanti > 0) {
             shells[i].objects.insert(shells[i].objects.end(), quanti, nuovo);
         }

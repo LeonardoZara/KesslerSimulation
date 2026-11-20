@@ -4,201 +4,217 @@
 #include <string>
 #include <vector>
 #include <cmath>
+#include <algorithm>
+#include <cstdint>
+#include <iomanip>
+#include <filesystem>
 #include <Eigen/Dense>
 #include <Eigen/Eigenvalues>
 
-// Funzione helper per leggere un CSV e trasformarlo in MatrixXd (dim x dim)
-bool leggiMatriceCSV(const std::string& nomeFile, int righe, int colonne, Eigen::MatrixXd& matrice) {
-    matrice = Eigen::MatrixXd::Zero(righe, colonne);
-    std::ifstream file(nomeFile);
- 
-    if (!file.is_open()) {
-        std::cerr << "Errore nella lettura del file: " << nomeFile << '\n';
-        return false;
-    }
- 
-    std::string linea, cella;
-    int riga = 0;
- 
-    while (std::getline(file, linea) && riga < righe) {
-        std::stringstream rigaStream(linea);
-        int col = 0;
- 
-        while (std::getline(rigaStream, cella, ',') && col < colonne) {
-            matrice(riga, col) = std::stod(cella); // stod converte string in double
-            col++;
-        }
-        riga++;
-    }
- 
-    file.close();
-    return true;
-}
- 
+// Tolleranza sul confronto con 1.
+static const double TOLLERANZA = 1e-4;
+
+// Sotto questa popolazione una colonna é troppo rumorosa per dire se l'anno é instabile.
+// Un singolo urto catastrofico genera ~250 frammenti per genitore, quindi con X oggetti sposta a_44 di 250/X: con 1000 oggetti al massimo di 0.25, con 100 di 2.5 (basta un urto per superare 1).
+static const double POPOLAZIONE_MINIMA = 1000.0;
+
 // Parte reale piu' grande tra gli autovalori. Le colonne non definite (nan: tipo assente a inizio anno) valgono 0. Serve per calcolare lambda_max anno per anno.
 double lambdaMax(Eigen::MatrixXd A) {
     for (int i = 0; i < A.rows(); ++i)
         for (int j = 0; j < A.cols(); ++j)
             if (std::isnan(A(i, j))) A(i, j) = 0.0;
- 
+
     Eigen::EigenSolver<Eigen::MatrixXd> solver(A);
     Eigen::VectorXcd autovalori = solver.eigenvalues();
- 
+
     double massimo = -1000.0;
     for (int i = 0; i < autovalori.size(); i++) {
         if (autovalori(i).real() > massimo) massimo = autovalori(i).real();
     }
     return massimo;
 }
- 
-void AnalisiSpettrale(int anni) {
-    int numGusci = 4; // Deve coincidere con i gusci della simulazione
-    int numTipi = 4;  // P, N, U, F: matrici 4x4
-    std::string cartellaOutput = "output/";
-    std::string nomiGusci[4] = {"Atmosfera", "300-400 km", "400-500 km", "500-600 km"};
- 
-    // Tolleranza sul confronto con 1.
-    const double TOLLERANZA = 1e-4;
- 
-    if (anni <= 0) {
-        std::cout << "Nessun anno da analizzare." << '\n';
+
+// lambda_max della matrice empirica di UN guscio in UN anno di UNA simulazione.
+// X = popolazione iniziale dell'anno (P, N, U, F). Le colonne con X < POPOLAZIONE_MINIMA valgono 0 (stessa regola di prima).
+// valutabile = true se la popolazione di frammenti F era >= POPOLAZIONE_MINIMA. Con la struttura attuale la matrice e'
+// triangolare bassa e P, N, U hanno a_ii <= 1: un anno puo' avere lambda_max > 1 solo attraverso a_44 (frammenti), quindi
+// un anno con F sotto soglia non e' valutabile (non puo' risultare instabile) e non entra nelle statistiche di lambda_max.
+double lambdaAnnuale(const Eigen::Matrix4d& A4, const Eigen::Vector4d& X, bool& valutabile) {
+    Eigen::MatrixXd A = A4;
+    for (int j = 0; j < 4; ++j) {
+        if (X(j) < POPOLAZIONE_MINIMA) A.col(j).setZero();
+    }
+    valutabile = (X(3) >= POPOLAZIONE_MINIMA);
+    return lambdaMax(A);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Statistica di una proporzione k/M (M run indipendenti): errore standard e intervallo di Wilson al 95%
+// (preferito a media +/- 1.96*SE perche' funziona anche per p vicino a 0 o 1, e per k = 0 o k = M).
+struct StatBinomiale { double p, se, lo, hi; };
+
+static StatBinomiale statBinomiale(int k, int M) {
+    const double z = 1.959964;
+    StatBinomiale r;
+    r.p  = static_cast<double>(k) / M;
+    r.se = std::sqrt(r.p * (1.0 - r.p) / M);
+    double z2 = z * z;
+    double denom  = 1.0 + z2 / M;
+    double centro = (r.p + z2 / (2.0 * M)) / denom;
+    double semi   = z * std::sqrt(r.p * (1.0 - r.p) / M + z2 / (4.0 * M * static_cast<double>(M))) / denom;
+    r.lo = std::max(0.0, centro - semi);
+    r.hi = std::min(1.0, centro + semi);
+    return r;
+}
+
+// Statistiche descrittive di un campione (una cifra per ogni run).
+struct StatDescrittive { int n; double media, sd, se, minimo, mediana, massimo; };
+
+static StatDescrittive statDescrittive(std::vector<double> v) {
+    StatDescrittive s{0, NAN, NAN, NAN, NAN, NAN, NAN};
+    s.n = static_cast<int>(v.size());
+    if (s.n == 0) return s;
+    std::sort(v.begin(), v.end());
+    double somma = 0.0;
+    for (double x : v) somma += x;
+    s.media = somma / s.n;
+    double ss = 0.0;
+    for (double x : v) ss += (x - s.media) * (x - s.media);
+    s.sd = (s.n > 1) ? std::sqrt(ss / (s.n - 1)) : 0.0;
+    s.se = s.sd / std::sqrt(static_cast<double>(s.n));
+    s.minimo  = v.front();
+    s.massimo = v.back();
+    s.mediana = (s.n % 2 == 1) ? v[s.n / 2] : 0.5 * (v[s.n / 2 - 1] + v[s.n / 2]);
+    return s;
+}
+
+// Analisi finale. lambda[r][s][t] e valutabile[r][s][t]: simulazione r (0..M-1), guscio s, anno t+1 (t = 0..T-1).
+// L'unita' statistica e' la SIMULAZIONE (M campioni indipendenti), non l'anno: gli anni di una stessa
+// simulazione sono correlati tra loro, quindi M*T non e' il numero di campioni indipendenti.
+void AnalisiMonteCarlo(const std::vector<std::vector<std::vector<double>>>& lambda,
+                       const std::vector<std::vector<std::vector<char>>>& valutabile,
+                       int M, int T, int numGusci,
+                       const std::vector<double>& lanci, std::uint64_t seedBase) {
+    std::string nomiGusci[4] = {"Atmosfera", "300-400 km", "400-500 km", "500-600 km"}; // Deve coincidere con i gusci della simulazione
+
+    if (M <= 0 || T <= 0) {
+        std::cout << "Nessuna simulazione da analizzare." << '\n';
         return;
     }
- 
-    // 1. Tre matrici "somma" SEPARATE, una per guscio (niente matrice a blocchi).
-    // Media pesata con la popolazione iniziale invece della media semplice.
-    // Ogni colonna j di ogni anno entra con peso X_k(j), cioé il numero di oggetti di quel tipo a inizio anno. Equivale a (somma dei flussi) / (somma delle popolazioni).
-    // a_ij = flusso / X_j; se X_j è piccolo il rapporto è enorme e casuale (10 frammenti e un urto: a_44 = 28).
-    // Un tipo assente (X_j = 0) ha peso 0, quindi sparisce da solo.
-    std::vector<Eigen::MatrixXd> matriciSomma(numGusci, Eigen::MatrixXd::Zero(numTipi, numTipi));
-    std::vector<Eigen::VectorXd> anniValidi(numGusci, Eigen::VectorXd::Zero(numTipi)); // somma dei pesi X_k(j)
- 
-    // Sotto questa popolazione una colonna é troppo rumorosa per dire se l'anno é instabile (usata solo per il conteggio degli anni con lambda_max > 1). 
-    // Un singolo urto catastrofico genera ~250 frammenti per genitore, quindi con X oggetti sposta a_44 di 250/X: con 1000 oggetti al massimo di 0.25, con 100 di 2.5 (basta un urto per superare 1).
-    const double POPOLAZIONE_MINIMA = 1000.0;
- 
-    // lambda_max di ogni singolo anno, per ogni guscio.
-    // Dopo una cascata i bersagli sono finiti, le matrici degli ultimi anni tornano stabili e la media su 50 anni puo' scendere sotto 1 anche se la sindrome é scoppiata nei primi anni.
-    std::vector<int> anniInstabili(numGusci, 0);   // anni con lambda_max > 1
-    std::vector<int> primoAnnoInstabile(numGusci, 0);
-    std::vector<double> lambdaPicco(numGusci, 0.0);
- 
-    std::cout << "Inizio lettura dei file CSV in " << cartellaOutput << "..." << '\n';
- 
-    for (int s = 0; s < numGusci; ++s) {
-        for (int anno = 1; anno <= anni; ++anno) {
-            std::string percorsoFile = cartellaOutput + "matrice_guscio_" + std::to_string(s)
-                                     + "_anno_" + std::to_string(anno) + ".csv";
-            Eigen::MatrixXd A;
-            if (!leggiMatriceCSV(percorsoFile, numTipi, numTipi, A)) continue;
- 
-            std::string percorsoPop = cartellaOutput + "popolazione_guscio_" + std::to_string(s)
-                                    + "_anno_" + std::to_string(anno) + ".csv";
-            Eigen::MatrixXd X;
-            if (!leggiMatriceCSV(percorsoPop, numTipi, 1, X)) continue;
- 
-            for (int j = 0; j < numTipi; ++j) {
-                if (std::isnan(A(0, j)) || X(j, 0) <= 0.0) continue; // tipo assente: colonna non definita
-                matriciSomma[s].col(j) += X(j, 0) * A.col(j); // peso = X_k(j)
-                anniValidi[s](j) += X(j, 0);
-            }
- 
-            // lambda_max di quest'anno (per il guscio 0 non ha significato: salta).
-            // Le colonne con meno di popolazione minima oggetti valgono 0 (troppo rumorose).
-            if (s > 0) {
-                for (int j = 0; j < numTipi; ++j) {
-                    if (X(j, 0) < POPOLAZIONE_MINIMA) A.col(j).setZero();
-                }
-                double lam = lambdaMax(A);
-                if (lam > lambdaPicco[s]) lambdaPicco[s] = lam;
-                if (lam > 1.0 + TOLLERANZA) {
-                    anniInstabili[s]++;
-                    if (primoAnnoInstabile[s] == 0) primoAnnoInstabile[s] = anno;
-                }
-            }
-        }
-    }
-    std::cout << "Letti " << anni << " file per ciascuno dei " << numGusci << " gusci." << '\n';
- 
-    std::vector<bool> kessler(numGusci, false);
-    std::vector<std::string> esito(numGusci, "non applicabile");
- 
-    for (int s = 0; s < numGusci; ++s) {
-        // Media temporale pesata colonna per colonna (un tipo mai presente resta a 0)
-        Eigen::MatrixXd matriceMedia = Eigen::MatrixXd::Zero(numTipi, numTipi);
-        for (int j = 0; j < numTipi; ++j) {
-            if (anniValidi[s](j) > 0.0) {
-                matriceMedia.col(j) = matriciSomma[s].col(j) / anniValidi[s](j);
-            }
-        }
- 
-        std::cout << "\nGUSCIO " << s << " (" << nomiGusci[s] << ")" << '\n';
-        std::cout << "MATRICE MEDIA (righe/colonne = P, N, U, F)" << '\n';
-        std::cout << matriceMedia << '\n';
- 
-        Eigen::EigenSolver<Eigen::MatrixXd> solver(matriceMedia);
- 
-        // Vettore di numeri complessi (std::complex<double>): gli autovalori possono avere parte immaginaria.
-        Eigen::VectorXcd autovalori = solver.eigenvalues();
- 
-        // L'autovalore dominante é quello con la parte reale piu' grande
-        double lambda_max = -1000.0;
- 
-        std::cout << "\nAutovalori:" << '\n';
-        for (int i = 0; i < autovalori.size(); i++) {
-            double parteReale = autovalori(i).real();
-            double parteImmaginaria = autovalori(i).imag();
- 
-            std::cout << "  lambda_" << i << " = " << parteReale;
-            if (std::abs(parteImmaginaria) > 1e-9) {
-                std::cout << (parteImmaginaria > 0 ? " + " : " - ")
-                          << std::abs(parteImmaginaria) << "i";
-            }
-            std::cout << '\n';
- 
-            if (parteReale > lambda_max) {
-                lambda_max = parteReale;
-            }
-        }
-        std::cout << "Autovalore dominante (lambda_max): " << lambda_max << '\n';
- 
-        if (s == 0) {
-            std::cout << "Atmosfera (stato assorbente): verdetto non applicabile" << '\n';
-            continue;
-        }
- 
-        std::cout << "lambda_max anno per anno: picco " << lambdaPicco[s] << ", maggiore di 1 in "
-                  << anniInstabili[s] << " anni su " << anni;
-        if (anniInstabili[s] > 0) std::cout << " (primo: anno " << primoAnnoInstabile[s] << ")";
-        std::cout << '\n';
- 
-        if (lambda_max > 1.0 + TOLLERANZA) {
-            kessler[s] = true;
-            esito[s] = "KESSLER (instabile)";
-            std::cout << "Sindrome di Kessler innescata in questo guscio" << '\n';
-        } else if (anniInstabili[s] > 0) {
-            // La media é < 1 ma in alcuni anni lambda_max era > 1: la cascata é partita e poi si é fermata (bersagli esauriti o frammenti decaduti).
-            kessler[s] = true;
-            esito[s] = "KESSLER TRANSITORIA (instabile nei primi anni, poi esaurita)";
-            std::cout << "Media stabile, ma cascata innescata in " << anniInstabili[s] << " anni" << '\n';
-        } else if (lambda_max < 1.0 - TOLLERANZA) {
-            esito[s] = "stabile";
-            std::cout << "Guscio stabile" << '\n';
-        } else {
-            esito[s] = "equilibrio critico";
-            std::cout << "Equilibrio critico" << '\n';
-        }
-    }
- 
-    std::cout << "\nVerdetto del modello:" << '\n';
-    bool almenoUno = false;
+
+    std::cout << std::fixed << std::setprecision(4);
+    std::cout << "\n================ ANALISI MONTE CARLO ================" << '\n';
+    std::cout << "M = " << M << " simulazioni indipendenti, T = " << T << " anni, seed base = " << seedBase << '\n';
+    std::cout << "Lanci annui di satelliti per guscio:";
+    for (int s = 1; s < numGusci; ++s) std::cout << "  g" << s << " = " << lanci[s];
+    std::cout << '\n';
+    std::cout << "Criterio: lambda_max(A_t) > 1 + " << TOLLERANZA << " in un anno t con almeno " << POPOLAZIONE_MINIMA
+              << " frammenti a inizio anno (anni con meno frammenti: non valutabili)" << '\n';
+
+    std::vector<char> instabileQualsiasi(M, 0);   // per run: instabile in almeno un guscio e un anno
+    std::vector<char> finaleQualsiasi(M, 0);      // per run: instabile in almeno un guscio all'anno T
+
+    // Riga di riepilogo per ogni guscio, da accodare al CSV
+    std::vector<std::string> righeCSV;
+    std::ostringstream prefissoLanci;
+    prefissoLanci << std::setprecision(10);
+    for (int s = 1; s < numGusci; ++s) prefissoLanci << lanci[s] << ",";
+    prefissoLanci << M << "," << T << "," << seedBase << ",";
+
     for (int s = 1; s < numGusci; ++s) {
-        std::cout << "Guscio " << s << " (" << nomiGusci[s] << "): " << esito[s] << '\n';
-        if (kessler[s]) almenoUno = true;
+        int kAlmenoUna = 0, kFinale = 0;
+        std::vector<double> picchi, medie, primiAnni;
+        double sommaAnniVal = 0.0;
+
+        for (int r = 0; r < M; ++r) {
+            int nVal = 0;
+            double picco = -1.0e300, somma = 0.0;
+            int primo = 0;
+            for (int t = 0; t < T; ++t) {
+                if (!valutabile[r][s][t]) continue;
+                double lam = lambda[r][s][t];
+                nVal++;
+                somma += lam;
+                if (lam > picco) picco = lam;
+                if (lam > 1.0 + TOLLERANZA && primo == 0) primo = t + 1;
+            }
+            sommaAnniVal += nVal;
+
+            bool inst = (primo > 0);
+            bool fin  = valutabile[r][s][T - 1] && (lambda[r][s][T - 1] > 1.0 + TOLLERANZA);
+            if (inst) { kAlmenoUna++; primiAnni.push_back(primo); instabileQualsiasi[r] = 1; }
+            if (fin)  { kFinale++;    finaleQualsiasi[r] = 1; }
+            if (nVal > 0) { picchi.push_back(picco); medie.push_back(somma / nVal); }
+        }
+
+        StatBinomiale bAny = statBinomiale(kAlmenoUna, M);
+        StatBinomiale bFin = statBinomiale(kFinale, M);
+        StatDescrittive dPicco = statDescrittive(picchi);
+        StatDescrittive dMedia = statDescrittive(medie);
+        StatDescrittive dPrimo = statDescrittive(primiAnni);
+        double anniValMedi = sommaAnniVal / M;
+
+        std::cout << "\nGUSCIO " << s << " (" << nomiGusci[s] << ")" << '\n';
+        std::cout << "  lambda_max > 1 in almeno un anno : " << kAlmenoUna << "/" << M << " = " << bAny.p
+                  << "   SE = " << bAny.se << "   IC95% Wilson [" << bAny.lo << ", " << bAny.hi << "]" << '\n';
+        std::cout << "  lambda_max > 1 all'anno finale T : " << kFinale << "/" << M << " = " << bFin.p
+                  << "   SE = " << bFin.se << "   IC95% Wilson [" << bFin.lo << ", " << bFin.hi << "]" << '\n';
+        if (kAlmenoUna > 0) {
+            std::cout << "  primo anno con lambda_max > 1 (mediana tra i " << kAlmenoUna << " run instabili): " << dPrimo.mediana << '\n';
+        }
+        std::cout << "  anni valutabili per simulazione (media): " << anniValMedi << " su " << T << '\n';
+        std::cout << "  lambda_max di picco (max sugli anni valutabili, " << dPicco.n << " run): media = " << dPicco.media
+                  << " +/- " << dPicco.se << " (SE), SD = " << dPicco.sd << ", min = " << dPicco.minimo
+                  << ", mediana = " << dPicco.mediana << ", max = " << dPicco.massimo << '\n';
+        std::cout << "  lambda_max medio (media sugli anni valutabili, " << dMedia.n << " run): media = " << dMedia.media
+                  << " +/- " << dMedia.se << " (SE), SD = " << dMedia.sd << ", min = " << dMedia.minimo
+                  << ", mediana = " << dMedia.mediana << ", max = " << dMedia.massimo << '\n';
+
+        std::ostringstream riga;
+        riga << prefissoLanci.str() << s << "," << std::setprecision(6)
+             << kAlmenoUna << "," << bAny.p << "," << bAny.se << "," << bAny.lo << "," << bAny.hi << ","
+             << kFinale << "," << bFin.p << "," << bFin.lo << "," << bFin.hi << ","
+             << dPicco.n << "," << dPicco.media << "," << dPicco.se << "," << dPicco.sd << ","
+             << dPicco.minimo << "," << dPicco.mediana << "," << dPicco.massimo << ","
+             << dMedia.media << "," << anniValMedi;
+        righeCSV.push_back(riga.str());
     }
-    if (almenoUno) {
-        std::cout << "La popolazione di detriti cresce in modo esponenziale nei gusci instabili." << '\n';
-    } else {
-        std::cout << "Nessun guscio in regime di Kessler." << '\n';
+
+    // Riga "qualsiasi guscio": evento = in quella simulazione almeno un guscio e' instabile
+    int kAnyShell = 0, kFinShell = 0;
+    for (int r = 0; r < M; ++r) { kAnyShell += instabileQualsiasi[r]; kFinShell += finaleQualsiasi[r]; }
+    StatBinomiale bAnyShell = statBinomiale(kAnyShell, M);
+    StatBinomiale bFinShell = statBinomiale(kFinShell, M);
+    std::cout << "\nQUALSIASI GUSCIO (almeno un guscio instabile nella stessa simulazione)" << '\n';
+    std::cout << "  in almeno un anno : " << kAnyShell << "/" << M << " = " << bAnyShell.p
+              << "   SE = " << bAnyShell.se << "   IC95% Wilson [" << bAnyShell.lo << ", " << bAnyShell.hi << "]" << '\n';
+    std::cout << "  all'anno finale T : " << kFinShell << "/" << M << " = " << bFinShell.p
+              << "   SE = " << bFinShell.se << "   IC95% Wilson [" << bFinShell.lo << ", " << bFinShell.hi << "]" << '\n';
+    {
+        std::ostringstream riga;
+        riga << prefissoLanci.str() << "qualsiasi," << std::setprecision(6)
+             << kAnyShell << "," << bAnyShell.p << "," << bAnyShell.se << "," << bAnyShell.lo << "," << bAnyShell.hi << ","
+             << kFinShell << "," << bFinShell.p << "," << bFinShell.lo << "," << bFinShell.hi << ","
+             << "0,nan,nan,nan,nan,nan,nan,nan,nan";
+        righeCSV.push_back(riga.str());
     }
+
+    // Accoda il riepilogo a output/riepilogo_run.csv (una riga per guscio per ogni esecuzione):
+    // serve a costruire il grafico "lanci vs frazione di simulazioni instabili" mettendo insieme piu' run.
+    const std::string percorso = "output/riepilogo_run.csv";
+    bool scriviIntestazione = !std::filesystem::exists(percorso) || std::filesystem::file_size(percorso) == 0;
+    std::ofstream out(percorso, std::ios::app);
+    if (!out.is_open()) {
+        std::cerr << "ERRORE: impossibile scrivere " << percorso << '\n';
+        return;
+    }
+    if (scriviIntestazione) {
+        for (int s = 1; s < numGusci; ++s) out << "lanci_g" << s << ",";
+        out << "M,T,seed_base,guscio,k_almeno_un_anno,p_almeno_un_anno,se,ic95_basso,ic95_alto,"
+               "k_anno_finale,p_anno_finale,ic95_basso_finale,ic95_alto_finale,"
+               "n_run_con_anni_valutabili,lambda_picco_media,lambda_picco_se,lambda_picco_sd,"
+               "lambda_picco_min,lambda_picco_mediana,lambda_picco_max,lambda_medio_media,anni_valutabili_medi\n";
+    }
+    for (const auto& riga : righeCSV) out << riga << "\n";
+    std::cout << "\nRiepilogo accodato a " << percorso << '\n';
 }

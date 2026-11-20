@@ -67,7 +67,6 @@ public:
                 A_emp.col(j).setConstant(std::numeric_limits<double>::quiet_NaN());
             }
         }
- 
         return A_emp;
     }
  
@@ -76,4 +75,3 @@ public:
         return initialPop[shell];
     }
 };
- 
