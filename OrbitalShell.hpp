@@ -16,13 +16,10 @@ public:
 
     OrbitalShell(int idx, double alt, double thick) 
         : index(idx), baseAltitude(alt), thickness(thick) {
-            double r_earth = 6371.0; // Raggio terrestre in km
+            double r_earth = 6371.0; //km
             double r_out = r_earth + baseAltitude + thickness;
             double r_in = r_earth + baseAltitude;
             volume = (4.0 * 3.14159 / 3.0) * (std::pow(r_out, 3) - std::pow(r_in, 3));
-
-            // Un trucco di ottimizzazione C++: pre-allochiamo memoria per evitare 
-            // riallocazioni continue quando aggiungiamo migliaia di detriti.
             objects.reserve(110000); 
         }
 

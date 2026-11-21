@@ -10,11 +10,9 @@
 #include <Eigen/Dense>
 #include <Eigen/Eigenvalues>
 
-// Tolleranza sul confronto con 1.
 static const double TOLLERANZA = 1e-4;
 
 // Sotto questa popolazione una colonna é troppo rumorosa per dire se l'anno é instabile.
-// Un singolo urto catastrofico genera ~250 frammenti per genitore, quindi con X oggetti sposta a_44 di 250/X: con 1000 oggetti al massimo di 0.25, con 100 di 2.5 (basta un urto per superare 1).
 static const double POPOLAZIONE_MINIMA = 1000.0;
 
 // Parte reale piu' grande tra gli autovalori. Le colonne non definite (nan: tipo assente a inizio anno) valgono 0.
@@ -33,9 +31,7 @@ double lambdaMax(Eigen::MatrixXd A) {
     return massimo;
 }
 
-// UN anno di UNA simulazione in UN guscio e' "instabile" se lambda_max della matrice empirica A di quell'anno e' > 1.
-// X = popolazione iniziale dell'anno (P, N, U, F). Le colonne con X < POPOLAZIONE_MINIMA valgono 0 (troppo rumorose):
-// quindi un anno con pochi frammenti non puo' risultare instabile (conta come stabile).
+// Un anno di una simulazione in UN guscio e' instabile se lambda_max della matrice empirica A di quell'anno e' > 1.
 bool annoInstabile(const Eigen::Matrix4d& A4, const Eigen::Vector4d& X) {
     Eigen::MatrixXd A = A4;
     for (int j = 0; j < 4; ++j) {
@@ -44,10 +40,8 @@ bool annoInstabile(const Eigen::Matrix4d& A4, const Eigen::Vector4d& X) {
     return lambdaMax(A) > 1.0 + TOLLERANZA;
 }
 
-// ---------------------------------------------------------------------------------------------
-// Riepilogo di UNA run (M simulazioni indipendenti con gli stessi lanci).
+// Riepilogo di una run (M simulazioni indipendenti con gli stessi lanci).
 // anniInstabili[s][r] = numero di anni (su T) in cui il guscio s della simulazione r e' risultato instabile.
-//
 // Due numeri per guscio:
 //  1. % di simulazioni instabili: una simulazione e' instabile se ha almeno kAnniMinimi anni instabili.
 //     Margine di errore (regola pratica): +/- 100/sqrt(M) punti percentuali (prudente: e' il caso peggiore, p = 50%).
