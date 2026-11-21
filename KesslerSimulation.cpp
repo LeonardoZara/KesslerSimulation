@@ -9,10 +9,8 @@
 // Indici dei gusci: 0 = atmosfera, 1 = 300-400, 2 = 400-500, 3 = 500-600 km
 namespace {
     const double secondsInYear = 3.15576e7;
-    const double v_rel = 10.0;    // km/s, velocita' relativa media in LEO
- 
+    const double v_rel = 9.73;    // km/s, velocita' relativa media in LEO
     const double S_CAM = 0.999;
-
     const double GAMMA = 0.01; // Guasti dei satelliti attivi: gamma = guasto a fine missione
     const double KAPPA = 5.3; // kappa = perdita di manovrabilita' per piccoli urti con i frammenti.
  
@@ -20,24 +18,18 @@ namespace {
  
     const double C_FRAMMENTI[4] = {500.0, 500.0, 3000.0, 1.0}; // Frammenti generati dalla distruzione di un oggetto di ciascun tipo (PDF §5/§6.3):
  
-    // Tasso di decadimento verso il guscio sotto, epsilon[tipo][guscio], per anno.
-    //  - P: 0, i satelliti attivi mantengono la quota con i propulsori.
-    //  - F: PDF §6.3 (0.90 / 0.75 / 0.60).
-    //  - N e U: Eq. 28 con A/m = 0.075 e rho(h) = 3.7e-12 * exp(-(h-400)/60) (3.7e-12 é la media dei due valori del PDF a 400 km; la scala di 60 km é una mia stima).
-    //    Risultato 10.4 / 1.98 / 0.38; i primi due superano 1 (escono dal guscio in meno di un anno) e li limito a 1.
+    // Tasso di decadimento verso il guscio sotto, epsilon[tipo][guscio], per anno.I satelliti attivi mantengono la quota con i propulsori.
     const double EPSILON[4][4] = {
         {0.0, 0.0,  0.0,  0.0 },   // P
         {0.0, 1.0,  1.0,  0.27},   // N
-        {0.0, 1.0,  1.0,  0.38},   // U
-        {0.0, 0.90, 0.75, 0.60}    // F
+        {0.0, 0.61, 0.1,  0.02},   // U
+        {0.0, 0.85, 0.14, 0.03}    // F
     };
 
-    // Tetto di sicurezza al numero di coppie candidate per guscio e per anno
-    // (poisson_distribution<int> va in overflow oltre ~2e9).
+    // Tetto di sicurezza al numero di coppie candidate per guscio e per anno (poisson_distribution<int> va in overflow oltre ~2e9).
     const double maxCandidates = 1.0e8;
  
-    // Sezione d'urto geometrica di una coppia: pi*(r1+r2)^2 con r = sqrt(A/pi)
-    // si semplifica in (sqrt(A1) + sqrt(A2))^2. Aree in m^2, risultato in m^2.
+    // Sezione d'urto geometrica di una coppia: pi*(r1+r2)^2 con r = sqrt(A/pi) si semplifica in (sqrt(A1) + sqrt(A2))^2. (m^2)
     double sigmaCoppia(double areaA, double areaB) {
         double somma = std::sqrt(areaA) + std::sqrt(areaB);
         return somma * somma;

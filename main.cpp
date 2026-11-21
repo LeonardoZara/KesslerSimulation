@@ -17,14 +17,11 @@ void AnalisiMonteCarlo(const std::vector<std::vector<int>>& anniInstabili,
 
 int main() {
     std::filesystem::create_directories("output");
-
-    // =====================================================================
-    //                 CONFIGURAZIONE DELLA RUN (modificare qui)
-    // =====================================================================
+    
     // M simulazioni Monte Carlo INDIPENDENTI, ciascuna di T anni, tutte dalla stessa
     // configurazione iniziale e con gli stessi lanci annui (costanti negli anni).
-    const int    M_SIMULAZIONI = 200;
-    const int    T_ANNI        = 50;
+    const int    M_SIMULAZIONI = 50;
+    const int    T_ANNI        = 20;
     const double DT            = 1.0;   // passo = 1 anno. Non cambiarlo: l'analisi e i lanci assumono dt = 1
 
     // Una simulazione e' "instabile" se ha almeno K_ANNI_MINIMI anni con lambda_max > 1 (anno instabile).
@@ -41,7 +38,7 @@ int main() {
     // Lanci annui di satelliti attivi per guscio (indice 0 = atmosfera, ignorato).
     // Interi: il codice arrotonda a intero (lround) i lanci di ogni anno.
     // Valori di riferimento: gamma * P0 = {9, 85, 4}. Cambiarli a mano tra una run e l'altra.
-    const std::vector<double> LANCI_P = {0.0, 9.0, 85.0, 4.0};
+    const std::vector<double> LANCI_P = {0.0, 3.0, 2.0, 1.0};
 
     // Sezione d'urto e massa dei satelliti: usate sia per la popolazione iniziale sia per i satelliti lanciati.
     // [MODIFICA] prima i lanciati avevano 130 m^2 e 800 kg (nel .cpp) mentre quelli iniziali 37.5 m^2 e 500 kg.

@@ -9,20 +9,13 @@
 class KesslerSimulation {
 private:
     int numShells;
-    double currentTime; // Tiene traccia degli anni passati
-
-    // Le due componenti principali del nostro universo
+    double currentTime;
     std::vector<OrbitalShell> shells;
     TransitionTracker tracker;
-
     std::mt19937 rng;
-
-    // [MODIFICA] Copia immutabile della configurazione iniziale: viene scritta una sola volta
-    // da saveInitialState() e poi solo LETTA da restoreInitialState().
     std::vector<OrbitalShell> initialShells;
 
-    // [MODIFICA] Lanci della run (prima erano costanti nel .cpp): satelliti attivi lanciati
-    // per anno in ciascun guscio, e loro sezione d'urto / massa.
+    // satelliti attivi lanciati per anno in ciascun guscio, e loro sezione d'urto / massa.
     std::vector<double> launchRates;
     double launchCrossSection;
     double launchMass;
