@@ -29,7 +29,6 @@ $$\lambda_{max}(A_k) > 1$$
 
 Il programma contenuto in questo repository esegue una simulazione Monte Carlo per campionare stocasticamente gli eventi di collisione all'interno di un guscio orbitale specifico. 
 
-### Caso di Studio: Costellazione Starlink
 Il modello è stato testato utilizzando i dati reali della costellazione Starlink di SpaceX (quote 300-600 km).
 
 
