@@ -44,10 +44,7 @@ bool annoInstabile(const Eigen::Matrix4d& A4, const Eigen::Vector4d& X) {
 // anniInstabili[s][r] = numero di anni (su T) in cui il guscio s della simulazione r e' risultato instabile.
 // Due numeri per guscio:
 //  1. % di simulazioni instabili: una simulazione e' instabile se ha almeno kAnniMinimi anni instabili.
-//     Margine di errore (regola pratica): +/- 100/sqrt(M) punti percentuali (prudente: e' il caso peggiore, p = 50%).
 //  2. % di anni instabili: (somma degli anni instabili di tutte le simulazioni) / (M*T).
-//     Margine: 1.96 * errore standard calcolato sulle M frazioni (una per simulazione), NON sugli M*T anni,
-//     perche' gli anni di una stessa simulazione non sono indipendenti.
 void AnalisiMonteCarlo(const std::vector<std::vector<int>>& anniInstabili,
                        int M, int T, int numGusci,
                        const std::vector<double>& lanci, std::uint64_t seedBase, int kAnniMinimi) {
@@ -100,9 +97,9 @@ void AnalisiMonteCarlo(const std::vector<std::vector<int>>& anniInstabili,
         double margineAnni = 100.0 * 1.96 * errStd;
 
         std::cout << "\nGUSCIO " << s << " (" << nomiGusci[s] << ")" << '\n';
-        std::cout << "  simulazioni instabili : " << nInstabili << " su " << M << " = " << percSimulazioni
-                  << "%   (margine circa +/- " << margineSimulazioni << " punti)" << '\n';
-        std::cout << "  anni instabili        : " << percAnni << "% degli anni simulati   (+/- " << margineAnni << ")" << '\n';
+        std::cout << "  simulazioni instabili: " << nInstabili << " su " << M << " = " << percSimulazioni
+                  << "% "<< '\n';
+        std::cout << "  anni instabili: " << percAnni << "% degli anni simulati  "<< '\n';
 
         std::ostringstream riga;
         riga << prefisso.str() << s << "," << std::fixed << std::setprecision(4)
