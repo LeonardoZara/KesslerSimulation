@@ -19,12 +19,12 @@ int main() {
     std::filesystem::create_directories("output");
     
     // M simulazioni Monte Carlo indipendenti, ciascuna di T anni, tutte dalla stessa configurazione iniziale e con gli stessi lanci annui (costanti negli anni).
-    const int    M_SIMULAZIONI = 20;
-    const int    T_ANNI        = 10;
-    const double DT            = 1.0;   // 1 anno, da non cambiare
+    const int M_SIMULAZIONI = 20;
+    const int T_ANNI = 10;
+    const double DT = 1.0;   // 1 anno, non cambiare
 
     // Una simulazione e' "instabile" se ha almeno K_ANNI_MINIMI anni con lambda_max > 1 (anno instabile).
-    const int    K_ANNI_MINIMI = 1;
+    const int K_ANNI_MINIMI = 1;
 
     // Seed di base. 0 = scelto a caso e stampato a video (cosi' la run si puo' rifare);
     const std::uint64_t SEED_BASE = 0;
