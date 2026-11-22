@@ -1,10 +1,10 @@
 # Simulazione Stocastica della Sindrome di Kessler
 
-Questo repository contiene l'implementazione in **C++** di un modello stocastico per la simulazione della **Sindrome di Kessler**. Il progetto modella l'ambiente dell'Orbita Terrestre Bassa (LEO) utilizzando un approccio macroscopico al fine di prevedere matematicamente l'innesco dell'instabilità collisionale spaziale.
+Questo repository contiene l'implementazione in **C++** di un modello stocastico per la simulazione della **Sindrome di Kessler**. Il progetto modella l'ambiente dell'orbita terrestre bassa (LEO) utilizzando un approccio macroscopico al fine di prevedere l'innesco dell'instabilità collisionale spaziale.
 
 ##  Il Modello Fisico-Matematico
 
-Lo spazio delle fasi (l'orbita LEO) è suddiviso in gusci orbitali concentrici. All'interno di ogni guscio, la popolazione di oggetti spaziali è suddivisa in quattro nodi:
+L'orbita è suddivisa in gusci orbitali concentrici. All'interno di ogni guscio, la popolazione di oggetti spaziali è suddivisa in quattro nodi:
 
 1. **$P$ (Payloads):** Satelliti attivi o manovrabili.
 2. **$U$ (Upper Stages):** Stadi superiori dei vettori abbandonati.
