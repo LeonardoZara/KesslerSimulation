@@ -97,9 +97,7 @@ void AnalisiMonteCarlo(const std::vector<std::vector<int>>& anniInstabili,
         std::cout << "  anni instabili: " << percAnni << "% degli anni simulati  "<< '\n';
 
         std::ostringstream riga;
-        riga << prefisso.str() << s << "," << std::fixed << std::setprecision(4)
-             << nInstabili << "," << percSimulazioni << "," << margineSimulazioni << ","
-             << percAnni << "," << margineAnni;
+        riga << prefisso.str() << s << "," << std::fixed << std::setprecision(4) << nInstabili << "," << percSimulazioni << "," << percAnni;
         righeCSV.push_back(riga.str());
     }
 
