@@ -34,7 +34,6 @@ public:
             shells.push_back(OrbitalShell(i, 300.0 + ((i - 1) * 100.0), 100.0));
         }
     }
-
     void addObjectsToShell(int shellIndex, int count, ObjectType type, double crossSection, double mass);
     void setLaunches(const std::vector<double>& ratesPerYear, double crossSection, double mass);
     void saveInitialState();

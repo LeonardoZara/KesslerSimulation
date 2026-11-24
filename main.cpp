@@ -36,7 +36,6 @@ int main() {
     const double SAT_SEZIONE = 37.5;    // m^2
     const double SAT_MASSA   = 500.0;   // kg
 
-    // Fattore di scala della popolazione iniziale
     const double scala = 1.0;
 
     KesslerSimulation sim(numGusci);

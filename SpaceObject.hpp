@@ -12,9 +12,9 @@ constexpr double fragmentMass  = 1.0;   // kg
 
 struct SpaceObject {
     ObjectType type;
-    double crossSection;    // Area in m^2 (sigma: per calcolare la probabilità di urto)
-    double mass;            // Massa in kg (per calcolare il numero di frammenti post-urto)
-    int initialShellIndex;  // Salva l'indice del guscio in cui l'oggetto si trovava all'inizio dell'anno simulato.
+    double crossSection;
+    double mass;
+    int initialShellIndex;
     
     ObjectType initialType;
     

@@ -11,7 +11,6 @@ public:
     double baseAltitude;    // Quota di base del guscio in km
     double thickness;       // Spessore del guscio in km 
     double volume;          // Volume totale in km^3
-    
     std::vector<SpaceObject> objects;
 
     OrbitalShell(int idx, double alt, double thick) 

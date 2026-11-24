@@ -40,11 +40,6 @@ bool annoInstabile(const Eigen::Matrix4d& A4, const Eigen::Vector4d& X) {
     return lambdaMax(A) > 1.0 + TOLLERANZA;
 }
 
-// Riepilogo di una run (M simulazioni indipendenti con gli stessi lanci).
-// anniInstabili[s][r] = numero di anni (su T) in cui il guscio s della simulazione r e' risultato instabile.
-// Due numeri per guscio:
-//  1. % di simulazioni instabili: una simulazione e' instabile se ha almeno kAnniMinimi anni instabili.
-//  2. % di anni instabili: (somma degli anni instabili di tutte le simulazioni) / (M*T).
 void AnalisiMonteCarlo(const std::vector<std::vector<int>>& anniInstabili,
                        int M, int T, int numGusci,
                        const std::vector<double>& lanci, std::uint64_t seedBase, int kAnniMinimi) {
@@ -108,8 +103,6 @@ void AnalisiMonteCarlo(const std::vector<std::vector<int>>& anniInstabili,
         righeCSV.push_back(riga.str());
     }
 
-    // Accoda il riepilogo a output/risultati_run.csv (una riga per guscio per ogni esecuzione):
-    // serve a fare i grafici "lanci vs % simulazioni instabili" e "lanci vs % anni instabili" mettendo insieme piu' run.
     const std::string percorso = "output/risultati_run.csv";
     bool scriviIntestazione = !std::filesystem::exists(percorso) || std::filesystem::file_size(percorso) == 0;
     std::ofstream out(percorso, std::ios::app);

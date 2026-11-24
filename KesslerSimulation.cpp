@@ -191,11 +191,8 @@ void KesslerSimulation::processCollisions(double dt) {
  
         double V = shells[i].volume;
  
-        // Calcolo del Valore Atteso
-        // Vengono prese le coppie candidate con il sigma massimo del guscio (due oggetti piu' grandi), poi ogni coppia viene accettata con probabilità
-        // sigma_coppia/sigma_max. Il risultato é esattamente un processo di Poisson con tasso proporzionale a sigma(i,j), senza dover sommare su tutte le coppie.
-        // Le coppie frammento-frammento (F-F) non vengono campionate, perchè un urto tra frammenti non aggiunge frammenti.
-        std::vector<int> grandi; // indici degli oggetti che non sono frammenti (P, N, U)
+        // Le coppie frammento-frammento (F-F) non vengono campionate.
+        std::vector<int> grandi; // indici degli oggetti non frammenti
         std::vector<int> frammenti;
         double A_max = 0.0;
         for (int k = 0; k < N; ++k) {
@@ -216,7 +213,6 @@ void KesslerSimulation::processCollisions(double dt) {
         double candidati_attesi = (coppie / V) * sigma_max_km2 * v_rel * dt * secondsInYear;
 
         // Tetto di sicurezza: poisson_distribution<int> va in overflow oltre 2e9.
-        // Se il tetto scatta gli urti sono SOTTOSTIMATI e i risultati non sono affidabili: avviso a terminale.
         if (candidati_attesi > maxCandidates) {
             static bool avvisato = false;
             if (!avvisato) {
